@@ -7,7 +7,7 @@
 --     ① **存档换根**：宿主的 `EVAL_HELP_CONFIG.EH_REALISTICMAP_CFG` → 本插件自己的 `EH_REALISTICMAP_CFG`
 --        （契约 ② 记忆体分离）；宿主老存档由 `importHostCfg()` **一次性纯读导入**，**绝不写回宿主存档**。
 --     ② **播报身份**：面向玩家的前缀 = `[EH_RealisticMap]`（契约 ⑥，与目录名逐字相同）；
---        自动播报走 `fogSay`/`fogSayV`（取代宿主期的 `[简易地图]` 前缀）。
+--        0.2.8 起**没有任何自动播报**（用户：「将日志清理下」）：只保留命令/按钮回显与「渲染抛错」一行。
 --     ③ **跨插件口**（契约 ⑤）：只读宿主 5 个桥（地图身份 / 引擎条数 / 有效缩放 / 开图信号）
 --        ＋ 共用件（`EVAL_SAY` / `EVAL_SAY_FORCE` / `EVAL_CHAT_ON` / `EVAL_LOGLINE` / `EVAL_RELOAD_ASK` /
 --        `EVAL_RELOAD_ASK_FRAME` / `EVAL_WHEEL_DIR`）—— 一律**运行期现读 + `type` 两道 + `pcall` + 拿不到就如实降级**：
@@ -19,7 +19,7 @@
 --        —— 宿主「缩放大地图」的**探索层折算**靠 `takesMap()` 判「本图是否真被接管」（判不出 ⇒ 不让位）。
 --   · 载入期**零副作用**（不建帧 / 不挂事件 / 不读写存档 / 不建计时器）：只有表与函数声明。
 --   · 内部命名：`MDQ` = 本模块族表（历史名，随整块搬来）；`ERM_CFG` = 存档代理；
---     `fogSay`/`fogSayV`/`fogLog` = 播报与取证出口（名字沿用宿主期 `fogSay*`/`fogLog` 的血统，机制换成本插件自己的）。
+--     ★0.2.8：`fogSay`/`fogSayV`/`fogLog` **与全部有界落盘环已整条删除** —— 插件平时一个字都不打。
 -- ============================================================
 
 local ADDON_NAME = "EH_RealisticMap"
@@ -55,7 +55,6 @@ end
 --   若写回 `local function` ⇒ 那些调用全绑全局 nil、被 `pcall` 静默吞掉 = 播报整条哑掉）。
 --   定义处一律**赋值**（`say = function(...)` / `L = function(...)`），绝不写回 `local`。
 local say, L, ECHO_SEC, ECHO_AT
-local fogSay, fogSayV, fogLog
 
 -- ============ 存档根（契约 ②：本插件自己的 `EH_REALISTICMAP_CFG`）============
 --   懒代理（与宿主期的 `ERM_CFG` 同一用法，改名 = 不再挂 SimpleMap 的名）：读写都**现取**存档表；
@@ -69,22 +68,21 @@ local ERM_CFG = setmetatable({}, {
   __index = function(_, k) return cfgLive()[k] end,
   __newindex = function(_, k, v) cfgLive()[k] = v end,
 })
--- ★详细档（原宿主 `ERM_CFG.mapFitVerbose`；`/erm 详细 on|off` 是唯一写口）——会话级、不落存档
-local function verboseOn() return ERM_CFG.mapFitVerbose == true end
 
 -- ★★★一次性导入宿主老存档（契约 ② 的**唯一豁免 = 纯读**；用户 2026-10-10 选定「要，一次性迁移」）
 --   为什么必须有：用户在宿主版里调过的**编辑补偿**（宿主 `EH_REALISTICMAP_CFG.editJpg`）与两个开关都躺在宿主存档里，
 --   换根之后不导入 = 用户眼里的「我调好的偏移量全没了」。
 --   四条口径：
 --     ① **只搬用户数据与用户显式选过的开关**：`edit` / `editJpg` / `editMode` / `swmOverlay` / `staleClean` /
---        `layerMode` / `staleLog`；★**取证环与一次性标记不搬**（`fitDiag` / `perfProbe` / `cacheCleared51` /
+--        `layerMode`；★**诊断环与一次性标记不搬**（`fitDiag` / `perfProbe` / `cacheCleared51` /
 --        `probeCleared52` / `mapFitMode` / `mapFitVerbose`）—— 那是诊断记录，新根从零开始更干净。
+--        ★0.2.8：日志整族已删除 ⇒ `staleLog` 也不再导入（它现在是个死键）。
 --     ② **老版本（≤1.75.56）那批键在宿主的 `simpleMapCfg` 里** ⇒ 同一趟按「本根没有才取」的顺序兜一遍。
 --     ③ ★**只做一次**（标记 `importedV1`）且**只有真读到宿主表才盖章**（拿不到 ⇒ 不盖章 ⇒ 下次再试 = 自愈）；
 --        ★**绝不删除宿主里那批键**（那是**别人的存档**：契约 ② + 本项目「不许写别人的存档根」）。
 --     ④ 导入后**如实出声一次**（条数点名）——「数据搬迁必须出声」。
-local ERM_IMPORT_KEYS = { "edit", "editJpg", "editMode", "swmOverlay", "staleClean", "layerMode", "staleLog" }
-local ERM_LEGACY_KEYS = { "cacheCleared51", "mapFitMode", "mapFitVerbose", "perfProbe", "probeCleared52", "staleClean", "staleLog", "swmOverlay" }
+local ERM_IMPORT_KEYS = { "edit", "editJpg", "editMode", "swmOverlay", "staleClean", "layerMode" }
+local ERM_LEGACY_KEYS = { "cacheCleared51", "mapFitMode", "probeCleared52", "staleClean", "swmOverlay" }
 local function importHostCfg()
   local me = cfgLive()
   if me.importedV1 == true then return 0, 0, false end
@@ -134,62 +132,19 @@ local function frameName(v)
   return "?"
 end
 
--- ============ 播报 / 取证出口（本插件自己的三个）============
---   ★为什么不再用宿主的 `EVAL_SM_FITSAY` / `EVAL_SM_MFLOG`：那两个口把取证环写在**宿主的存档**
---     （`simpleMapCfg.mapFitTrace`）⇒ 契约 ② 明令子插件**不许写宿主存档根**。
---     现在：取证环 = `ERM_CFG.trace`（本插件自己的**有界**环）。
---   ★总闸门口径不变：**自动播报**受宿主「调试日志」管（`EVAL_CHAT_ON`，拿不到就照说）；
---     **用户主动敲的命令 / 点我们自己的按钮** = 「你问它答」⇒ 走 `EVAL_SAY_FORCE`（章 = `ECHO_AT` 时间戳）。
---   ★用**时间戳**而不是布尔标志：命令分支有几十个 `return`，标志漏清 = 「此后自动播报全漏出来」；时间戳自己过期。
-local ERM_TRACE_MAX = 60 -- ★与宿主期 `MF_TRACE_MAX` 同值（取证环条数口径不变，AI 读存档的习惯不变）
+-- ============ 命令回显窗口（0.2.8：本插件不再有任何自动日志 / 取证环）============
+--   ★0.2.8（用户：「将日志清理下」+ 选定「连取证环一起删」）：**自动上屏的播报**与**全部有界落盘环**
+--     （trace / staleLog / editLog / perfProbe / fitDiag）已**整条删除** —— 插件平时一个字都不打。
+--   ★还留着的两类输出（都不是日志）：
+--     ① **用户主动敲的命令 / 点我们自己的按钮** = 「你问它答」⇒ 走 `EVAL_SAY_FORCE`（章 = `ECHO_AT` 时间戳）；
+--     ② **渲染这一拍抛错**一行（`MDQ.renderErrSay`，同一条只出声一次）—— 那是真实故障信号，
+--        静默下来就变成「地图卡住且不吭声」（在案：0.2.2 就是为它加的）。
+--   ★用**时间戳**而不是布尔标志：命令分支有几十个 `return`，标志漏清 = 「此后回显全漏出来」；时间戳自己过期。
 ECHO_SEC = 0.75
 ECHO_AT = 0
 local function echoing()
   if type(GetTime) ~= "function" then return false end
   return GetTime() <= (tonumber(ECHO_AT) or 0)
-end
-local function chatGateOn()
-  local g = rawget(_G, "EVAL_CHAT_ON")
-  if type(g) ~= "function" then return true end
-  local ok, v = pcall(g)
-  if not ok then return true end
-  return v == true
-end
--- ★前向声明在文件顶部 ⇒ 这里改**赋值**（`fogLog = function(...)`），别写回 `local function`
-fogLog = function(fmt, ...)
-  local msg = (select("#", ...) > 0) and string.format(fmt, ...) or tostring(fmt)
-  local c = cfgLive()
-  local ring = c.trace
-  if type(ring) ~= "table" then ring = {} c.trace = ring end
-  table.insert(ring, msg)
-  while table.getn(ring) > ERM_TRACE_MAX do table.remove(ring, 1) end
-  local f = rawget(_G, "EVAL_LOGLINE")
-  if type(f) == "function" then pcall(f, msg) end
-  return msg
-end
-fogSay = function(fmt, ...)
-  local msg = (select("#", ...) > 0) and string.format(fmt, ...) or tostring(fmt)
-  fogLog("[播报] %s", msg)                       -- ★取证环**照记**（关掉总闸门只是「不上屏」，断链不成立）
-  if not echoing() and not chatGateOn() then return msg end
-  local out = rawget(_G, "EVAL_SAY_FORCE")
-  if type(out) == "function" then pcall(out, ADDON_TAG .. msg) return msg end
-  if type(DEFAULT_CHAT_FRAME) == "table" and DEFAULT_CHAT_FRAME.AddMessage then
-    pcall(DEFAULT_CHAT_FRAME.AddMessage, DEFAULT_CHAT_FRAME, ADDON_TAG .. msg)
-  end
-  return msg
-end
--- ★是**赋值**不是 `local function`（同上：旧 `fogSayV` 的引用点在声明之前，1.75.57c 踩过一次）
-fogSayV = function(fmt, ...)
-  local msg = (select("#", ...) > 0) and string.format(fmt, ...) or tostring(fmt)
-  fogLog("[详细] %s", msg)
-  if not verboseOn() then return msg end
-  if not echoing() and not chatGateOn() then return msg end
-  local out = rawget(_G, "EVAL_SAY_FORCE")
-  if type(out) == "function" then pcall(out, ADDON_TAG .. msg) return msg end
-  if type(DEFAULT_CHAT_FRAME) == "table" and DEFAULT_CHAT_FRAME.AddMessage then
-    pcall(DEFAULT_CHAT_FRAME.AddMessage, DEFAULT_CHAT_FRAME, ADDON_TAG .. msg)
-  end
-  return msg
 end
 
 local MDQ = {}
@@ -203,7 +158,10 @@ local MDQ = {}
 --   ② `/ehm mapfit 自检` 的落盘环表头与 `[1] 环境` 行（跟着那一次的读数一起存）。
 --   ★★★2026-10-10 迁移：本文件已不属于宿主 ⇒ **改记号跟本子插件的版本走**（`EH_RealisticMap.toc` 的 `## Version`，
 --     两者必须相等；宿主那套「三处一致」判据从本版起只管宿主自己的两处）。
-MDQ.BUILD = "0.2.7"   -- ★2026-10-11：两档素材**文件名加档后缀**（实景 `_re` / 彩绘 `_cn`）—— 同名不同目录这一族的最可疑成因（与 .toc 的 ## Version 必须一致；闸门 = tmp/rel_version_check.js）
+MDQ.BUILD = "0.2.17"
+-- ★0.2.13：切档**是否换新纹理对象**（历史遗留开关）—— 默认 **false**（复用同一个对象、只换贴图）。
+MDQ.SWAP_OBJ_ON_SWITCH = false   -- ★2026-10-11：图层切换**只保留「区域实景」**（彩绘/原始图**临时关闭**，功能保留：见 MDQ.LAYER_OFF）
+-- （0.2.9 的那句自述保留在 git 历史：`git show <0.2.9>:addons/EH_RealisticMap/EH_RealisticMap.lua`）   -- ★2026-10-11：加第三档「原始图」（LAYER_SRC：客户端美术合成的整图）+ 三档循环切换（与 .toc 的 ## Version 必须一致；闸门 = tmp/rel_version_check.js）
 
 -- ★★★1.75.60b：**编辑模式里的两个视图开关**（用户：「编辑模式右侧增加原始贴图层的显示和隐藏,迷雾贴图层的显示和隐藏」）
 --   用途 = 逐块对位时的「对照看」：把**客户端自己的探索层**放出来、把我们画的迷雾层收起来 ——
@@ -231,7 +189,7 @@ MDQ.liveFogOff = function() return (MDQ.showFog == false) and (MDQ.editOn ~= nil
 MDQ.STALE_GAP = 0.25      -- 换图/开图窗口内的扫描节拍（客户端这时还在重摆/重指贴图，扫密一点）
 MDQ.STALE_GAP_IDLE = 1.0  -- 窗口外的节拍（非区域地图上照样把「又冒出来的」叠加层再藏掉）
 MDQ.STALE_SEC = 3.0       -- 「换图 / 开图」后的快扫窗口长度（窗口内 0.25s 一拍）
-MDQ.STALE_LOG_MAX = 40    -- 「藏了哪些纹理」的**有界落盘环**上限（`ERM_CFG.staleLog`，最新在前）
+
 -- ★★★**同一处误删的还有这张表**（真机红字：`bad argument #1 to 'pairs' (table expected, got nil)` @ tick 里那行）：
 --   `MDQ.staleHid` = **藏账**（纹理对象 → { name = 层名, path = 当时的贴图 }）；区域图上全部还回时清空。
 --   ⇒ 与上面四个常量一起留在表定义旁边；★纪律：**摘除大块代码后必须做一次「状态初始化审计」**
@@ -247,7 +205,7 @@ MDQ.ownSet = {}      -- 同上但按**对象身份**记（`MDQ.own[n] = 纹理` 
                      --   名字判定不够（本客户端那批原生层也叫 `WorldMapOverlay<n>`，我们补建的还可能与之重名）。
 MDQ.poolSeen = 0     -- 见过的最大池位号（收尾 Hide 只扫到它，不空扫 poolMax 次）
 MDQ.newN = 0         -- **本轮**新加了几张（渲染行如实报「客户端既有 N ｜ 新加 M」）
-MDQ.saidMk = nil     -- 上一张已播报过的地图（每图只报一次，不刷屏）
+
 
 -- ★★★1.75.54 **性能收口（1.75.53 真机报障「开了十几个地区以后游戏会卡死」换来的）** —— 三处：
 --   ① **写前比对**（`MDQ.slot`）：每块记住「上次写进去的 (地图/区域/块号/倍率/对象)」，
@@ -427,9 +385,21 @@ end
 --        ★彩绘 → `EH_REALISTICMAP_CFG.editPaint` / `MapOverlayOffsetPaint.lua`（2026-10-11 加）。`editTbl`/`editFileTbl` 按模式**换根**
 --        ⇒ 编辑模式那一整族（拖拽/箭头/尺寸/列表/重置/体检）**一行不改**就跟着走
 --        —— 键形态仍是 `区域#块号`，实景的伪区域 = `MDQ.JPG_AREA`（`_JPG#1`）、彩绘 = `MDQ.PAINT_AREA`（`_PAINT#1`）。
+-- ★★★2026-10-11 第二轮（现行口径，上面「已删除」那段已成历史）：**`LAYER_ART` = 第三档「原始图」**，
+--   已按用户指令**接回逐区域逐块那条路**（`MapOverlayData.lua` + `MapOverlayOffset.lua` + `media\WorldMap`）⇒
+--   唯一判据口服 `MDQ.artMode()`；`LAYER_SRC`（0.2.9 的合成整区 JPG）只作**旧 id 兼容**（读/写两口就地归一）。
 MDQ.LAYER_ART, MDQ.LAYER_JPG, MDQ.LAYER_PAINT = "art", "jpg", "paint"
+-- ★★★2026-10-11（用户：「地图图层切换内再添加个类型**原始图**」）：第三档 **`LAYER_SRC`（原始图）** ——
+--   素材 = `media\WorldMapSource\<图>_src.jpg`（生成物 `tmp/gen_worldmapsource.js`）= **把客户端自己的地图美术
+--   「合成成一张独立整图」**：4x3 基础底图（`<图>1..12`，按补丁优先级抽）+ 区域块（`media\WorldMap\<图>\<区域><块号>`，
+--   位置 = `MapOverlayData` 表值 + `MapOverlayOffset` 补偿）= **游戏里「全探索」时的完整画面**（含底图 ⇒ 没有空洞）。
+--   基表 = `MapOverlaySourceData.lua`（生成物 `tmp/gen_worldmapsourcedata.js`）·
+--   补偿根 = `EH_REALISTICMAP_CFG.editSrc` / `MapOverlayOffsetSource.lua`。
+--   ★它与实景/彩绘**同形状**（整区一张 · 基线 `{1002,668,0,0}` · 写 `OVERLAY` · 伪区域 `_SRC`）⇒ 同一套代码。
+MDQ.LAYER_SRC = "src"
 MDQ.JPG_AREA, MDQ.JPG_TILE = "_JPG", 1
 MDQ.PAINT_AREA, MDQ.PAINT_TILE = "_PAINT", 1
+MDQ.SRC_AREA, MDQ.SRC_TILE = "_SRC", 1
 -- ★★★1.75.65（用户：「默认设置 开启世界迷雾->选中实景地图,关闭彩图」）：**默认档 = 区域实景**。
 --   ★★★2026-10-10：「区域彩图」档**删除**（`LAYER_ART` 只留给 `MDQ.layerSet` 的一句**如实拒绝语** —— 不许静默降级）。
 --   ★**函数与 `LAYER_ART` 常量都保留**：读口签名不变（`areaOf` / `editTbl` / `editFileTbl` / `holdN` 全走它）。
@@ -442,18 +412,51 @@ MDQ.PAINT_AREA, MDQ.PAINT_TILE = "_PAINT", 1
 --     ⇒ 两者**共用同一套**渲染 / 编辑 / 接管守护 / 写后自证代码，只在**四处**按模式分派：
 --     基表 · 贴图前缀 · 补偿根 · 伪区域名。**这四处一律走下面那几个 `MDQ.frame*` 口**（唯一分派点）——
 --     散在各调用点自己判模式，就是本项目在案的「按存储格式分派必须一次全改」那个雷。
---   ★读口**白名单式**：只认 `LAYER_PAINT` / `LAYER_JPG`；其余（含已删的 `"art"`、垃圾值、nil）一律**按默认档 `LAYER_JPG`**。
+--   ★读口**白名单式**：只认 `LAYER_SRC` / `LAYER_PAINT` / `LAYER_JPG`；其余（含已删的 `"art"`、垃圾值、nil）一律**按默认档 `LAYER_JPG`**。
 MDQ.layerMode = function()
   local v = (type(ERM_CFG) == "table") and ERM_CFG.layerMode or nil
-  if v == MDQ.LAYER_PAINT then return MDQ.LAYER_PAINT end
+  -- ★★★0.2.11：**第三档「原始图」= `LAYER_ART`**（逐区域逐块）。0.2.9 那个 id（`"src"` = 合成整区 JPG）
+  --   **并入本档** ⇒ 老存档里的 `"src"` 在这里就地归一（VLA 里另有一次性迁移 + 出声）。
+  if v == MDQ.LAYER_SRC then v = MDQ.LAYER_ART end
+  -- 临时关闭的档（`MDQ.LAYER_OFF`）⇒ 一律按实景（**保留功能**：放回那张表即恢复）
+  if v == MDQ.LAYER_ART then if MDQ.layerOn(MDQ.LAYER_ART) then return MDQ.LAYER_ART end return MDQ.LAYER_JPG end
+  if v == MDQ.LAYER_PAINT then if MDQ.layerOn(MDQ.LAYER_PAINT) then return MDQ.LAYER_PAINT end return MDQ.LAYER_JPG end
   return MDQ.LAYER_JPG
 end
 MDQ.jpgMode = function() return MDQ.layerMode() == MDQ.LAYER_JPG end
 MDQ.paintMode = function() return MDQ.layerMode() == MDQ.LAYER_PAINT end
--- ★**「整区一张」这一族**（实景 / 彩绘共用）—— **所有行为闸门只读它**（`tiles` / `expectRect` / `areaOf` /
+MDQ.srcMode = function() return MDQ.layerMode() == MDQ.LAYER_SRC end
+-- ★★★0.2.11：**第三档「原始图」的唯一判据口**（第三档 = `LAYER_ART`，逐区域逐块；`srcMode` 只剩旧 id 兼容）
+MDQ.artMode = function() return MDQ.layerMode() == MDQ.LAYER_ART end
+-- ★★★2026-10-11（用户：「图层切换功能**只保留实景**，其他两个功能**临时关闭**。**保留功能**」）：
+--   **临时关闭 = 只在这张表里点名** —— 代码 / 素材（media\WorldMapPaint · media\WorldMapSource）/ 三张基表 /
+--   三档补偿 / 五个分派口 / 编辑模式分派 / 面板那两行**一个字节都没删** ⇒ **删掉这一行（或改 false）就全放回来**。
+--   · 读口 `layerMode()` 兜底：存档里存着被关的档 ⇒ **按实景走**（面板那两行随之自动收起 —— 勾态由真值重画）；
+--   · 写口 `layerSet()` 如实说「已临时关闭」，**绝不静默降级**；
+--   · 顶栏按钮不把它们排进循环；只剩实景时文案 = 「其余图层临时关闭」，点它无副作用。
+-- ★★★2026-10-11 第二轮（用户：「切换原始图功能调整到采用 MapOverlayOffset.lua MapOverlayData.lua
+--   media\WorldMap 内的贴图载入模式…现在将这个功能在增加回来」）：**「原始图」这一档已放回**，而且走的就是
+--   **逐区域逐块**那条路（= `MDQ.LAYER_ART`：`MapOverlayData.lua` 定位置 + `MapOverlayOffset.lua`/存档补偿
+--   + `media\WorldMap\<图>\<区域><块号>`）⇒ 本表**只剩「图层彩绘」一档临时关闭**。
+--   ★★★0.2.12（用户：「WorldMapSource 这个先不要对接(这个数据不准).原始图面就是你上面刚完成恢复的数据集贴图」）：
+--     **WorldMapSource 那套整条不平移进来** —— 它那两张表已从 `.toc` 撤下（文件留在磁盘、可随时放回），
+--     素材也不进子包（`pack_subaddons.ps1` 已把它列进不发货清单）；`LAYER_SRC` 只剩**旧存档 id 兼容**（读/写两口归一成 `"art"`）。
+MDQ.LAYER_OFF = { [MDQ.LAYER_PAINT] = true, [MDQ.LAYER_ART] = true }
+-- ★0.2.16（用户：「先关闭原始图功能.不调试了」）：「原始图」一档也临时关闭 ⇒ 只留「区域实景」。
+--   ★恢复 = 把上面那行里的 [MDQ.LAYER_ART] = true 去掉（一个字）；素材/表都还在磁盘上（只是不进包）。
+MDQ.layerOn = function(m)
+  if m == MDQ.LAYER_JPG then return true end
+  if type(MDQ.LAYER_OFF) == "table" and MDQ.LAYER_OFF[m] == true then return false end
+  return true
+end
+-- ★**「整区一张」这一族**（实景 / 彩绘 / 原始图共用）—— **所有行为闸门只读它**（`tiles` / `expectRect` / `areaOf` /
 --   `holdN` / `renderCurrent` / `editTbl` / `editFileTbl`）；彩图那一族（逐区域逐块 + 256 网格）靠 `not frameMode()` 分流。
 MDQ.frameMode = function() return MDQ.layerMode() ~= MDQ.LAYER_ART end
-MDQ.frameArea = function() return MDQ.paintMode() and MDQ.PAINT_AREA or MDQ.JPG_AREA end
+MDQ.frameArea = function()
+  if MDQ.srcMode() then return MDQ.SRC_AREA end
+  if MDQ.paintMode() then return MDQ.PAINT_AREA end
+  return MDQ.JPG_AREA
+end
 MDQ.frameTile = function() return 1 end
 
 -- 实景基线表（生成物 `MapOverlayJPGData.lua`；懒读 + **大小写不敏感**，与 `MDQ.areaOf` 同口径）
@@ -538,38 +541,94 @@ MDQ.paintSrcOf = function(file)
   return "own"
 end
 
+-- ============ ★★★「原始图」那一份（第三档，与实景/彩绘**同形状**；2026-10-11 新增）============
+--   素材 = `media\WorldMapSource\<图>_src.jpg`（生成物 `tmp/gen_worldmapsource.js`）。
+--   它**不是外部素材**，而是「**客户端自己的地图美术合成成一张独立整图**」：
+--     ① 基础底图 = `<图>1..12`（4x3x256，行优先，从帧左上 1:1 铺、右下被 1002x668 帧裁掉），
+--        源 = 乌龟服归档 `interface/patch-9/patch-Z`，**按补丁优先级取**（后面的补丁覆盖前面的 ⇒
+--        抽出来的就是客户端实际显示的那一份；抽取器 `tmp/wmsrc_base_tiles.js` 有 `--plan` 自证）；
+--     ② 区域块 = `media\WorldMap\<图>\<区域><块号>.blp`，位置 = `MapOverlayData` 表值 + `MapOverlayOffset` 补偿
+--        （与运行期 `editFinal`/`editSize` 同一套算式）。
+--   ⇒ 画面 = **游戏里「全探索」时的那张完整地图**（有底图 ⇒ 不像区域块那样只覆盖 ~50%）。
+--   基表 = `MapOverlaySourceData.lua`（生成物 `tmp/gen_worldmapsourcedata.js`；帧空间，每图一条 `{1002,668,0,0}`）。
+--   ★三条与另外两档**逐字同口径**（换了素材，口径一个没改）：懒读 + 大小写不敏感 · 只自带一份 ·
+--     准入带**负对照**且**判不出就放拦**（`MDQ.probeTrust`）。
+MDQ.srcTbl = function()
+  local t = rawget(_G, "EVAL_MAP_OVERLAY_SOURCE_DATA")
+  if type(t) ~= "table" then return nil end
+  return t
+end
+MDQ.srcBase = function(file)
+  if type(file) ~= "string" or file == "" then return nil end
+  local t = MDQ.srcTbl()
+  if t == nil then return nil end
+  local r = t[file]
+  if type(r) == "table" then return r, file end
+  local low = string.lower(file)
+  for k, v in pairs(t) do
+    if type(k) == "string" and type(v) == "table" and string.lower(k) == low then return v, k end
+  end
+  return nil
+end
+MDQ.srcPfx = "Interface\\AddOns\\EH_RealisticMap\\media\\WorldMapSource\\"
+-- ★同另外两档：文件名带档后缀 `_src`（见 `MDQ.JPG_SUF` 那段的口径与理由）
+MDQ.SRC_SUF = "_src"
+MDQ.srcPath = function(file) return MDQ.srcPfx .. tostring(file) .. MDQ.SRC_SUF end
+MDQ.srcSrc = {}
+MDQ.srcSrcOf = function(file)
+  local c = MDQ.srcSrc[file]
+  if c == true then return "own" end
+  if c == false then return "none" end
+  local ok = MDQ.probeTrust(MDQ.srcPath(file))
+  if ok == true then MDQ.srcSrc[file] = true return "own" end
+  if ok == false then MDQ.srcSrc[file] = false return "none" end
+  return "own"
+end
+
 -- ★★★**「整区一张」这一族的四个分派口（模式分派只在这里）** ——
 --   其余调用点（`tiles` / `expectRect` / `areaOf` / `holdN` / `renderCurrent` / `jpgRender` / `editTbl` /
 --   `editFileTbl` / 体检命令）**一律走这四个口或 `MDQ.frameMode()`**，绝不各自判 `paintMode()`。
+--   ★★**加档就加在这四个口里**（2026-10-11 加「原始图」时一行都没动别处）：顺序 = 原始图 → 彩绘 → 实景。
 MDQ.frameBase = function(file)
+  if MDQ.srcMode() then return MDQ.srcBase(file) end
   if MDQ.paintMode() then return MDQ.paintBase(file) end
   return MDQ.jpgBase(file)
 end
 MDQ.framePath = function(file)
+  if MDQ.srcMode() then return MDQ.srcPath(file) end
   if MDQ.paintMode() then return MDQ.paintPath(file) end
   return MDQ.jpgPath(file)
 end
 MDQ.frameSrcOf = function(file)
+  if MDQ.srcMode() then return MDQ.srcSrcOf(file) end
   if MDQ.paintMode() then return MDQ.paintSrcOf(file) end
   return MDQ.jpgSrcOf(file)
 end
 -- ★★★2026-10-11：**本档贴图路径里的「档标记」**（写后自证专用：读回 `GetTexture()` 里必须含它）——
---   两档的目录名本身就是最硬的区分（`media\WorldMapJpg\…` / `media\WorldMapPaint\…`），
+--   各档的目录名本身就是最硬的区分（`media\WorldMapJpg\…` / `…\WorldMapPaint\…` / `…\WorldMapSource\…`），
 --   不用再去比整条路径（客户端会把路径归一，比整条 = 天天假报，本项目在案）。
 MDQ.framePathMark = function()
+  if MDQ.srcMode() then return "WorldMapSource" end
   if MDQ.paintMode() then return "WorldMapPaint" end
   return "WorldMapJpg"
 end
 -- 体检/播报用的两个名字（**写死在这里一处**，免得散在各处的文案与真值漂移）
 MDQ.frameSrcName = function()
+  if MDQ.artMode() then return "media\\WorldMap" end
+  if MDQ.srcMode() then return "media\\WorldMapSource" end
   if MDQ.paintMode() then return "media\\WorldMapPaint" end
   return "media\\WorldMapJpg"
 end
 MDQ.frameTblName = function()
+  if MDQ.artMode() then return "MapOverlayData.lua" end
+  if MDQ.srcMode() then return "MapOverlaySourceData.lua" end
   if MDQ.paintMode() then return "MapOverlayPaintData.lua" end
   return "MapOverlayJPGData.lua"
 end
 MDQ.frameLabel = function()
+  -- ★0.2.11：第三档「原始图」走 `LAYER_ART`（逐区域逐块）；`src` 是 0.2.9 的旧 id（归一后不会走到）
+  if MDQ.artMode() then return "原始图" end
+  if MDQ.srcMode() then return "原始图" end
   if MDQ.paintMode() then return "图层彩绘" end
   return "区域实景"
 end
@@ -801,12 +860,6 @@ MDQ.texAt = function(n)
   local nm = "WorldMapOverlay" .. tostring(n)
   if n > (tonumber(MDQ.poolSeen) or 0) then MDQ.poolSeen = n end
   local t = rawget(_G, nm)
-  if t ~= nil then
-    -- ★★★1.75.52 六改 b：**复用来的池位也算「我们接管了」** —— 我们马上要往它身上写表内容；
-    --   不标记的话「接管守护」会把它当客户端原生层**再藏一次** ⇒ 数据库查出来的层等于没加上（用户实报）。
-    MDQ.ownSet[t] = true
-    return t, "existing"
-  end
   t = MDQ.own[n]
   if t ~= nil then
     MDQ.ownSet[t] = true
@@ -816,13 +869,17 @@ MDQ.texAt = function(n)
   if not (type(fr) == "table" or type(fr) == "userdata") or type(fr.CreateTexture) ~= "function" then
     return nil, "no_frame"
   end
-  local ok, t2 = pcall(fr.CreateTexture, fr, nm, "ARTWORK")
+  -- ★★★0.2.14（用户：「F. 具名对象与客户端自己的池位名字撞车 + 我们自己把客户端的全局绑定抹掉 这个也试下」）：
+  --   **不再用客户端的池位名建我们的对象**（旧写法 `CreateTexture(fr, "WorldMapOverlay<n>", ...)` 拿的是
+  --   客户端自己也用的那批名字 ⇒ 撞名；「原始图」档要建到几十号，撞面最大）⇒ 一律**匿名建**，
+  --   我们只靠 `MDQ.own[n]` / `ownSet[t]` 按序号与对象身份记账，**不占任何全局名**。
+  --   ★匿名建不出来才退回具名（fail-open：宁可占名也绝不静默画不出来，并记进 `MDQ.made`）。
+  local ok, t2 = pcall(fr.CreateTexture, fr, nil, "ARTWORK")
   if not ok or t2 == nil then
-    local ok2, t3 = pcall(fr.CreateTexture, fr, nil, "ARTWORK")   -- ★退回匿名（照样能画）
-    if ok2 and t3 ~= nil then t2 = t3 else return nil, "create_failed" end
+    local ok2, t3 = pcall(fr.CreateTexture, fr, nm, "ARTWORK")
+    if ok2 and t3 ~= nil then t2 = t3 MDQ.made[nm] = true else return nil, "create_failed" end
   end
   MDQ.own[n] = t2
-  MDQ.made[nm] = true
   MDQ.ownSet[t2] = true     -- ★身份账（接管守护判「这张是不是我们自建的」唯一依据）
   MDQ.newN = (tonumber(MDQ.newN) or 0) + 1
   -- ★2026-10-11：**本会话一共新建过几个对象**（累计，不随每拍重置）—— 图层自证要用它判「是不是每次切档都在新建」
@@ -1021,6 +1078,15 @@ MDQ.render = function(file, k, force)
           local fw, fh = MDQ.editSize(pw, ph, off)
           if used then MDQ.offN = (tonumber(MDQ.offN) or 0) + 1 end
           local tex, how = MDQ.texAt(n + 1)
+          -- ★★★0.2.15（G 修）：**写前复核句柄** —— 过期句柄（对象已被销毁/重建）连宽高都读不到 ⇒
+          --   当场丢掉记账重取一个；这是把「陈旧句柄」变成一次性自愈的唯一入口。
+          do
+            local okt, tw = pcall(tex.GetWidth, tex)
+            if (not okt) or (tonumber(tw) == nil) then
+              if how ~= "created" then MDQ.own[n + 1], MDQ.ownSet[tex] = nil, nil tex, how = MDQ.texAt(n + 1) end
+              if tex == nil then full = false fail = "stale_handle" break end
+            end
+          end
           if tex == nil then full = false fail = (how or "create_failed") break end
           if how == "existing" then nExist = nExist + 1 end
           n = n + 1
@@ -1241,11 +1307,8 @@ MDQ.jpgRender = function(file, k, force)
             MDQ.unitFit = fit
             k = k * fit
             MDQ.jpgPlace(tex, fr, fw, fh, fox, foy, k)   -- 按测量值重写一次（同一写入口）
-            MDQ.fitSay = string.format("世界迷雾·实景倍率：屏幕实测「贴图/帧 = %.3f」⇒ 已校正 ×%.4f（k 现在 = %.4f）"
-              .. "，本图铺满帧", fit, fit, k)
           else
             MDQ.unitFit = 1
-            MDQ.fitSay = string.format("世界迷雾·实景倍率：屏幕实测「贴图/帧 = %.3f」⇒ 基线原样即铺满，无需校正", fit)
           end
         end
       end
@@ -1275,11 +1338,6 @@ MDQ.jpgRender = function(file, k, force)
             tex, how = t2, "own"
             MDQ.texSwapFixed = (tonumber(MDQ.texSwapFixed) or 0) + 1
           end
-          if not MDQ.texSwapSaid then
-            MDQ.texSwapSaid = true
-            pcall(fogSay, "世界迷雾：切图层时**贴图没换成功**（要写 %s，读回却是 %s）⇒ 已**换一个新对象重写一次**。"
-              .. "读回原文：%s ｜ 若画面还是不对，请把这一行发我", wantM, otherM, pathG)
-          end
         end
       end
     end
@@ -1288,7 +1346,7 @@ MDQ.jpgRender = function(file, k, force)
       ow = fw, oh = fh, jpg = true,
       fa = ((sg ~= nil) and (sg.tex == tex)) and sg.fa or nil }
     MDQ.wroteN = 1
-    if MDQ.fitSay ~= nil then say(MDQ.fitSay) MDQ.fitSay = nil end
+
   end
   MDQ.lastW, MDQ.lastH = fw * k, fh * k
   MDQ.lastTw, MDQ.lastTh = tonumber(rec[1]) or 0, tonumber(rec[2]) or 0
@@ -1428,8 +1486,6 @@ MDQ.origRestore = function(why)
     MDQ.origIdx[idx] = nil
   end
   if n > 0 or bad > 0 then
-    pcall(fogLog, "还原复用的客户端池位（%s）：原贴图/几何还回 %d 个%s", tostring(why), n,
-      (bad > 0) and ("；**抓不到原值** " .. tostring(bad) .. " 个已先隐藏（客户端重摆版式时自己恢复）") or "")
   end
   return n, bad
 end
@@ -1454,7 +1510,7 @@ MDQ.release = function(why)
     MDQ.dupStat.cache, MDQ.dupStat.mk = {}, nil
     MDQ.dupStat.groups, MDQ.dupStat.hid, MDQ.dupStat.same, MDQ.dupStat.blind = 0, 0, 0, 0
   end
-  MDQ.dupSaid = nil
+
   -- ★★★1.75.59j：**实验也必须收**（绝不留「永久隐形/永久换过的贴图」）——
   --   关开关 / 关功能 / 任何收层三条路都会走到 `release` ⇒ 实验的还原天然全覆盖。
   if MDQ.trialActive and MDQ.trialActive() then pcall(MDQ.trialStop, "收层（" .. tostring(why) .. "）") end
@@ -1473,11 +1529,7 @@ MDQ.release = function(why)
   MDQ.slot = {}    -- ★1.75.54：收层 = 把那几层藏了 ⇒ 写前比对全部作废（下次要画会老老实实重写一遍）
   MDQ.alphaZeroByIdx = {}   -- ★1.75.60g：我们自己的 alpha-0 账跟着作废（换图/收层后同一序号不是同一块）
   MDQ.newN = 0
-  MDQ.saidMk = nil
-  if n > 0 then
-    pcall(fogLog, "收层（%s）：我们补建的 %d 个叠加层已 Hide（纹理不能销毁，只能藏；藏了就不再被当成客户端的层）",
-      tostring(why), n)
-  end
+
   return n
 end
 
@@ -1498,13 +1550,11 @@ MDQ.shutdown = function(why)
   local ok1, r1 = pcall(MDQ.release, tostring(why))
   if ok1 then a = tonumber(r1) or 0 end
   pcall(MDQ.staleShowAll, tostring(why))
-  pcall(fogLog, "[mapfit] %s：收层 %d 个 + 复用池位还原原值 + 藏过的原生层全部还回"
-    .. "（此后不再渲染、不再接管；再打开时从零开始）", tostring(why), a)
   return a
 end
 
 -- 渲染 + **写后自证**（返回 块数, 区域数, 判定文本）；`silent` = 一个字都不打（逐帧重申那条路）
---   ★`quiet` 只为与渲染节拍的调用约定对齐而保留；本档的播报节流由 `MDQ.saidMk`（每图一次）与
+--   ★`quiet` 只为与渲染节拍的调用约定对齐而保留；0.2.8 起本档不再播报，两个播报门已删除（旧的：
 --     「k 变了也报一次」（缩放级别变了 = 真事件）负责。
 MDQ.renderCurrent = function(es, quiet, silent, withGuard)
   -- ★★★1.75.54d + 1.75.54e（用户报障「关闭功能之后依然在生效」，以及「开关状态要做好正确的功能开关状态维护.
@@ -1537,20 +1587,6 @@ MDQ.renderCurrent = function(es, quiet, silent, withGuard)
     MDQ.lastRender = { map = file, n = 0, areas = 0, inTbl = true, full = false, k = 1, src = "none",
       why = frame and ("本图 " .. MDQ.frameLabel() .. " JPG（" .. MDQ.frameSrcName() .. "）加载不出来")
         or "本应用加载不出这批贴图（自带 media\\WorldMap 与客户端 Interface\\WorldMap 都没有）" }
-    if type(MDQ.noTexSaid) ~= "table" then MDQ.noTexSaid = {} end
-    if not MDQ.noTexSaid[file] then
-      MDQ.noTexSaid[file] = true
-      if frame then
-        pcall(fogSay, "世界迷雾·%s：地图=%s ｜ **加载不出**这张整区 JPG（`%s\\%s`）"
-          .. "⇒ **这一张图不接管**（客户端自己的探索层保持原样；不渲染、不藏原生）。体检：/erm 图层",
-          MDQ.frameLabel(), tostring(file), MDQ.frameSrcName(), tostring(file))
-      else
-        pcall(fogSay, "世界迷雾：地图=%s ｜ 本客户端**加载不出**这批探索层贴图"
-          .. "（`media\\WorldMap\\%s\\…` 与 `Interface\\WorldMap\\%s\\…` 两份都探不到）"
-          .. "⇒ **这一张图不接管**（客户端自己的探索层保持原样；不渲染、不藏原生）。体检：/ehm mapfit 贴图",
-          tostring(file), tostring(file), tostring(file))
-      end
-    end
     return 0, 0, "本图贴图加载不出来（不接管）"
   end
   -- ★★★1.75.51（用户：「缩放要根据当前缩放级别和数据库实时计算」）：倍率**现读**，不留常数。
@@ -1599,11 +1635,6 @@ MDQ.renderCurrent = function(es, quiet, silent, withGuard)
   if (not MDQ.perfGuard) and (_ms > (tonumber(MDQ.SLOW_MS) or 12)
       or (tonumber(MDQ.perfSlowN) or 0) >= 3) then
     MDQ.perfGuard = true
-    pcall(fogSay, "世界迷雾：本拍耗时 **%.0f ms**（地图=%s ｜ %d 块 ｜ 客户端叠加层 %d 条）"
-      .. "⇒ 已**自动降档**：逐帧重申改成 0.5s 一拍（护守照旧每拍查数量/存在性；功能不受影响）。"
-      .. "取证：/ehm mapfit perf", _ms, tostring(file), n, tonumber(hSeen) or 0)
-    pcall(fogLog, "[perf] 降档：%.1f ms ｜ %s ｜ %d 块 ｜ 写 %d ｜ 跳过 %d",
-      _ms, tostring(file), n, tonumber(MDQ.wroteN) or 0, tonumber(MDQ.skipN) or 0)
   end
   -- 写后自证：读回**我们真正写的那张**第一块（可能是客户端原有的池位，也可能是我们自己补建的匿名纹理）
   --   两种已知口径都认（读回 = 写入值 / 读回 = 写入值 × es）—— 都对不上就如实说「判不出」。
@@ -1623,37 +1654,7 @@ MDQ.renderCurrent = function(es, quiet, silent, withGuard)
       verdict = string.format("写入 %.1f ⇒ 读回 %.1f ⇒ **判不出/没接受**（既不是写入值，也不是 ×es %.2f）", MDQ.lastW, lw, e)
     end
   end
-  if silent then return n, nArea, verdict end  -- 逐帧重申那条路：一个字都不打（连取证环也不进）
-  local mk = mapKey() or file
-  -- 播报门 = **每图一次** + **k 变了再报一次**（用户在缩放地图 ⇒ 倍率真的变了，值得一行）
-  local kChg = (MDQ.lastKSaid == nil) or (math.abs((tonumber(MDQ.lastKSaid) or 0) - k) > 0.03)
-  if MDQ.saidMk ~= mk or kChg then
-    MDQ.saidMk, MDQ.lastKSaid = mk, k
-    local line = string.format("世界迷雾：地图=%s ｜ 表里 %d 区 ⇒ 渲染 %d 块（客户端既有 %d ｜ 新加 %d）"
-      .. "｜ 倍率 k=%.3f（%s）｜ 外框 es=%.3f ｜ 首块=%s 表 %.0fx%.0f @%.0f,%.0f ⇒ 写 %.0fx%.0f @%.0f,%.0f%s",
-      tostring(file), nArea, n, tonumber(nExist) or 0, tonumber(nNew) or 0,
-      k, tostring(kSrc), tonumber(es) or 1,
-      tostring(MDQ.lastArea or "?"), tonumber(MDQ.lastTw) or 0, tonumber(MDQ.lastTh) or 0,
-      tonumber(MDQ.lastTox) or 0, tonumber(MDQ.lastToy) or 0,
-      tonumber(MDQ.lastW) or 0, tonumber(MDQ.lastH) or 0,
-      (tonumber(MDQ.lastTox) or 0) * k, -((tonumber(MDQ.lastToy) or 0) * k),
-      ((why and (" ｜★" .. why)) or "")
-      -- ★1.75.52 六改：守护的三个数字（数量/存在性）摊在**同一行**（用户点名要「数量、存在性都要检查」）
-      .. string.format(" ｜ 守护：藏原生 %d（又冒出来再藏 %d）｜ 复位我们自建 %d ｜ 枚举池位 %d（认出我们画的 %d）｜ 本图应有 %d 块",
-        tonumber(hHid) or 0, tonumber(hAgain) or 0, tonumber(hBack) or 0, tonumber(hSeen) or 0,
-        tonumber(MDQ.holdStat.ours) or 0, tonumber(hWant) or 0))
-    pcall(fogLog, "%s ｜ 自证：%s", line, verdict)
-    -- ★「真出问题必须出声」（本项目判据）：本图不在表里 / 一块都没渲 / 渲不完整 / 自证判不出 / 倍率判不出 ⇒ 常开出口上屏；
-    --   正常的成功行走**详细档**（用户：「清理之前调试的一些日志」）—— 全量永远在 mapFitTrace 取证环里。
-    local prob = (not inTbl) or (not full) or (n == 0)
-      or (string.find(verdict, "判不出", 1, true) ~= nil)
-      or (string.find(kSrc, "判不出", 1, true) ~= nil)
-    if prob then
-      fogSay("%s ｜ 自证：%s", line, verdict)
-    else
-      fogSayV("%s ｜ 自证：%s", line, verdict)
-    end
-  end
+  if silent then return n, nArea, verdict end  -- 逐帧重申那条路：一个字都不打
   return n, nArea, verdict
 end
 MDQ.staleLevel = function(file)
@@ -1674,28 +1675,9 @@ MDQ.staleLevel = function(file)
   return false, "判不出（GetCurrentMapZone 与 S_WorldMap 表都读不到）"
 end
 
--- ★「藏了哪些纹理」记进**有界落盘环**（`ERM_CFG.staleLog`，最新在前、最多 `MDQ.STALE_LOG_MAX` 条）：
---   用户要的就是「把哪些纹理隐藏了记下来」；★只上屏的日志 `/reload` 后就没了、事后也没法取证
---   （本项目纪律：探针/判定的**原话必须落盘**，否则用户跑一趟等于白跑）。
-MDQ.staleLogPut = function(line)
-  if type(ERM_CFG) ~= "table" then return 0 end
-  local t = ERM_CFG.staleLog
-  if type(t) ~= "table" then t = {} ERM_CFG.staleLog = t end
-  table.insert(t, 1, tostring(line))
-  local n = table.getn(t)
-  while n > MDQ.STALE_LOG_MAX do t[n] = nil n = n - 1 end
-  return table.getn(t)
-end
+-- 0.2.8：`ERM_CFG.staleLog` 落盘环已整条删除（用户：「将日志清理下」+ 选定「连取证环一起删」）。
 
 -- 读落盘环（最新在前，最多 max 条）
-MDQ.staleLogGet = function(max)
-  local t = (type(ERM_CFG) == "table") and ERM_CFG.staleLog or nil
-  if type(t) ~= "table" then return {} end
-  local out = {}
-  local lim = math.min(tonumber(max) or MDQ.STALE_LOG_MAX, table.getn(t))
-  for i = 1, lim do out[i] = tostring(t[i]) end
-  return out
-end
 
 -- 藏账的层名清单（播报 / 体检用）：`WorldMapOverlay1、WorldMapOverlay3…（共 N 个）`
 MDQ.staleNames = function(max)
@@ -1786,7 +1768,7 @@ end
 --       （这一级客户端要用这批池位画本图的探索层；★**不还回就是永久窟窿** —— 这条是本次改动的第一判据）。
 --   ★纪律不变：**只 `Hide`/`Show`**，绝不 `SetTexture`、绝不动 UV、绝不改几何；
 --     **名字不合 `WorldMapOverlay*` 的对象（底图瓦片 `WorldMapDetailTile*` / 匿名纹理）一个字节都不碰**。
---   ★**藏了哪几条记名 + 落盘**（`ERM_CFG.staleLog` 有界 40）—— 用户 1.75.52 二改点名要的那一条。
+--   ★**藏了哪几条记名**（0.2.8：落盘环已删 ⇒ 只在内存藏账里记；`/erm 残留` 照旧逐条摊开）。
 --   ★返回 本轮新藏 N, 本轮还回 M, 看过的池位 k, 当前图名, 藏账条数, 级别依据
 MDQ.staleTick = function()
   local fileRaw = tostring(select(1, mapInfo()) or "")
@@ -1853,8 +1835,6 @@ MDQ.staleTick = function()
               local okp, path = pcall(o.GetTexture, o)
               if not okp then path = nil end
               MDQ.staleHid[o] = { name = nm, path = tostring(path) }
-              MDQ.staleLogPut(string.format("藏：地图=%s（%s）｜ %s ｜ 贴图=%s",
-                tostring(want), tostring(whyLvl), tostring(nm), tostring(path)))
             end
           end
         end
@@ -1866,8 +1846,6 @@ MDQ.staleTick = function()
   if nTex > 0 and seen == 0 then
     MDQ.staleNoPoolSay = (tonumber(MDQ.staleNoPoolSay) or 0) + 1
     if MDQ.staleNoPoolSay <= 3 then
-      pcall(fogLog, "残留图层：本图（%s）**没认出任何 WorldMapOverlay 池位**（枚举 %d 个纹理，名字样本：%s）",
-        tostring(want), nTex, table.concat(samples, "、"))
     end
   end
   return hid, 0, seen, want, MDQ.staleLedgerN(), whyLvl
@@ -1884,9 +1862,7 @@ MDQ.staleShowAll = function(why)
     n = n + 1
   end
   if n > 0 then
-    pcall(fogLog, "残留图层：把藏起来的 %d 个叠加层全部还回（%s）", n, tostring(why))
     table.sort(names)
-    MDQ.staleLogPut(string.format("还回全部 %d 个（%s）：%s", n, tostring(why), table.concat(names, "、")))
   end
   return n
 end
@@ -1900,8 +1876,6 @@ MDQ.staleForget = function(why)
     n = n + 1
   end
   if n > 0 then
-    pcall(fogLog, "残留图层：账上 %d 个叠加层交给「接管守护」接管（替代开关已开，%s）", n, tostring(why))
-    MDQ.staleLogPut(string.format("转交接管守护 %d 个（%s）", n, tostring(why)))
   end
   return n
 end
@@ -1976,7 +1950,7 @@ MDQ.staleProbe = function()
     want, noData and "**没有探索层数据 ⇒ 叠加层全藏**" or "有探索层数据 ⇒ **不藏**（藏账全部还回）",
     tostring(lvlWhy), en, nAll, nPool, nEng, nHide, nTileMis, nUnk, MDQ.staleLedgerN()))
   for _, l in ipairs(lines) do table.insert(out, l) end
-  -- ★「把哪些纹理隐藏了」= 用户点名要的那一条：当前藏账逐条 + 落盘历史（`ERM_CFG.staleLog`）
+  -- ★「把哪些纹理隐藏了」= 当前藏账逐条（0.2.8：落盘历史那一段已随日志整族删除）
   table.insert(out, string.format("残留体检·当前藏账 %d 条：%s", MDQ.staleLedgerN(), MDQ.staleNames(12)))
   local ledger = {}
   for o, rec in pairs(MDQ.staleHid) do
@@ -1985,14 +1959,6 @@ MDQ.staleProbe = function()
   end
   table.sort(ledger)
   for _, l in ipairs(ledger) do table.insert(out, l) end
-  local hist = MDQ.staleLogGet(12)
-  table.insert(out, string.format("残留体检·落盘历史（ERM_CFG.staleLog，最多 %d 条，最新在前）%d 条：",
-    MDQ.STALE_LOG_MAX, table.getn(hist)))
-  if table.getn(hist) == 0 then
-    table.insert(out, "　（空 —— 本档还没藏过任何纹理；/reload 后这里也会保留）")
-  else
-    for i = 1, table.getn(hist) do table.insert(out, "　" .. hist[i]) end
-  end
   return out
 end
 
@@ -2021,7 +1987,7 @@ MDQ.holdAlphaByIdx = {}
 --   没有账 ⇒ 一个字节都不写（「缩放大地图 → 透明度」< 1 时画布 alpha 本来就读回 < 1，那是用户的设置不是伤；
 --   旧版每拍写回 1 = 真机「贴图一闪一闪」的根因之一，A/B 实证见 `MDQ.mapAlpha` 的注释）。
 MDQ.alphaZeroByIdx = {}
-MDQ.saidAlphaNotOurs = nil
+
 MDQ.HOLD_LEDGER_MAX = 600  -- ★真机日志取证：客户端每拍重建自己的池位 ⇒ 无界账一小时就攒到 3960 条
 
 -- 池位名字里的**尾号**（`WorldMapOverlay7` → 7）；认不出（字母后缀 / 没有后缀）⇒ nil，**绝不猜**
@@ -2143,8 +2109,6 @@ MDQ.holdNote = function(o, file, tag)
       MDQ.holdHid[old] = nil
     end
   end
-  MDQ.staleLogPut(string.format("%s：地图=%s ｜ 客户端原生层 %s ｜ 贴图=%s",
-    tostring(tag or "接管藏"), tostring(file), tostring(nm), tostring(path)))
   return true
 end
 
@@ -2209,13 +2173,6 @@ MDQ.dupKill = function(byIdx, want, file)
     local ng = 0
     for _, lst in pairs(byIdx) do if table.getn(lst) > 1 then ng = ng + 1 end end
     MDQ.dupStat.groups, MDQ.dupStat.hid, MDQ.dupStat.same, MDQ.dupStat.blind = ng, 0, 0, ng
-    if MDQ.saidDupAlpha ~= mk then
-      MDQ.saidDupAlpha = mk
-      pcall(MDQ.staleLogPut, string.format(
-        "同序号去重**整组不动手**：地图=%s ｜ 外框 alpha=%.3f（= 「缩放大地图 → 透明度」< 1）⇒ 本客户端 alpha 读回会被"
-          .. "比例缩放 ⇒ 哨兵探针判不准（真机会把我们自己的画布当重复图藏掉 = 一闪一闪）⇒ 判不出就不动手；"
-          .. "要这份去重请把透明度调回 1.00", tostring(file), fa))
-    end
     return 0, 0, ng, ng, hidSet
   end
   -- ★★★1.75.60g：**「藏 + 写后验证 + 立刻回滚」= 唯一实现**（fresh 探针与缓存两条路共用）。
@@ -2284,16 +2241,6 @@ MDQ.dupKill = function(byIdx, want, file)
         end
       end
     end
-    pcall(MDQ.staleLogPut, string.format(
-      "同序号重复**判错已回滚**：地图=%s ｜ 号=%s ｜ 藏掉之后我们自己的画布跟着变了（= 同一张纹理，"
-        .. "多半是「缩放大地图 → 透明度」< 1 让哨兵读回被缩放）⇒ 已 `Show` + 还原 alpha；该组本会话不再动手",
-      tostring(file), tostring(idx)))
-    if MDQ.saidDupRoll ~= mk then
-      MDQ.saidDupRoll = mk
-      pcall(fogSay, "接管守护：地图=%s ｜ 同序号去重**判错已回滚**（藏了之后我们自己的画布跟着变了 ⇒ 那是同一张"
-        .. "纹理）⇒ 已当场 `Show` + 还原 alpha，这一组本会话不再动手；那份重复图会暂时留着（体检：/ehm mapfit 重复）",
-        tostring(file))
-    end
     return 0, true
   end
   for idx, list in pairs(byIdx) do
@@ -2303,7 +2250,8 @@ MDQ.dupKill = function(byIdx, want, file)
       -- ★★缓存键 = **构成指纹**（我们的活句柄 + 组里第一条 + 条数）—— 只按「序号」缓存是不够的：
       --   本图的对象随时可能被重建（我们 `release` 清账 / 客户端重摆池位）⇒ 旧结论（尤其 `blind`）
       --   会被套到**新对象**上 ⇒ 该藏的不藏（harness 的 ⑱ 组当场抓到过：同一张图上前后两次建的批次不同）。
-      local mine = rawget(_G, "WorldMapOverlay" .. tostring(idx)) or MDQ.own[idx]
+      -- ★0.2.15（G 修）：**优先写我们自己的对象**（旧的写法优先拿客户端那个 ⇒ 哨兵 alpha 写进了别人的对象）
+      local mine = MDQ.own[idx] or rawget(_G, "WorldMapOverlay" .. tostring(idx))
       local ck = tostring(idx) .. "@" .. tostring(mine) .. "#" .. tostring(list[1] and list[1].o) .. "/" .. tostring(n)
       local cached = MDQ.dupStat.cache[ck]
       if cached ~= nil then
@@ -2663,13 +2611,6 @@ MDQ.holdTick = function(file)  if not MDQ.swm() then return 0, 0, 0, 0, 0 end
     MDQ.holdStat.at = (type(GetTime) == "function") and GetTime() or 0
     MDQ.holdStat.blind = true
     local mkB = mapKey() or tostring(file)
-    if MDQ.holdSaidBlind ~= mkB then
-      MDQ.holdSaidBlind = mkB
-      pcall(fogSay, "接管守护：地图=%s ｜ 枚举到 **%d** 个叠加层池位，但**一个都认不出是我们画的**"
-        .. "（本拍画了 %d 块）⇒ **判不出 ⇒ 一个字节都不碰**（宁可保留原生的，也绝不留空白图）。"
-        .. "取证：/ehm mapfit 自检（[2]/[3] 两段给枚举逐条与我们的活句柄）",
-        tostring(file), seen, drew)
-    end
     return 0, 0, seen, want, 0
   end
   MDQ.holdStat.blind = false
@@ -2681,16 +2622,6 @@ MDQ.holdTick = function(file)  if not MDQ.swm() then return 0, 0, 0, 0, 0 end
   hid = hid + dupHid
   MDQ.holdStat.dupHid, MDQ.holdStat.dupSame, MDQ.holdStat.dupBlind = dupHid, tonumber(dupSame) or 0, tonumber(dupBlind) or 0
   MDQ.holdStat.dupGroups = tonumber(dupGroups) or 0
-  if dupHid > 0 then
-    local mkD = mapKey() or tostring(file)
-    if MDQ.dupSaid ~= mkD then
-      MDQ.dupSaid = mkD
-      pcall(fogSay, "接管守护：地图=%s ｜ 发现**同序号重复**（枚举里同号的 `WorldMapOverlay*` 不止一条）⇒ "
-        .. "按「属性往返探针」判出**另一张纹理**并**藏了 %d 条**（那就是图上那份**拖不动的重复图**）；"
-        .. "判为同一张纹理的别名 %d 条、判不出 %d 组（判不出就一个字节都不碰）。取证：/ehm mapfit 检查",
-        tostring(file), dupHid, tonumber(dupSame) or 0, tonumber(dupBlind) or 0)
-    end
-  end
   -- ===== 第二趟：动手（藏原生 + 数量守护），并复位/自愈我们自己的画布 =====
   for _, it in ipairs(shows) do
     local o = it.o
@@ -2712,14 +2643,6 @@ MDQ.holdTick = function(file)  if not MDQ.swm() then return 0, 0, 0, 0, 0 end
           fixA = fixA + 1
           MDQ.alphaZeroByIdx[it.idx] = nil
         end
-      elseif it.alpha ~= nil and it.alpha < 0.999 and MDQ.saidAlphaNotOurs ~= tostring(file)
-        -- ★1.75.60l：**我们自己设的「迷雾贴图统一透明度」不是「别人的透明度」** ⇒ 不许拿那句
-        --   「多半是『缩放大地图 → 透明度』设置」去误报（否则用户一调透明度就吃到一条假诊断；取证行只许真话）。
-        and not ((type(MDQ.alphaIsOurs) == "function") and MDQ.alphaIsOurs(it.alpha)) then
-        MDQ.saidAlphaNotOurs = tostring(file)
-        pcall(MDQ.staleLogPut, string.format(
-          "画布 alpha < 1 但**不是我们写的**（地图=%s ｜ %.3f）⇒ 一个字节都不动（多半是「缩放大地图 → 透明度」"
-            .. "设置；旧版把它当误伤、每拍写回 1 ⇒ 一闪一闪）", tostring(file), it.alpha))
       end
     end
   end
@@ -2758,8 +2681,6 @@ MDQ.holdTick = function(file)  if not MDQ.swm() then return 0, 0, 0, 0, 0 end
             again = again + 1
             -- ★「客户端又把它 Show 出来了」= 用户报障的那条现象；每个对象最多记 3 次（环有界、不刷屏）
             if recO.again <= 3 then
-              MDQ.staleLogPut(string.format("接管再藏（第 %d 次）：地图=%s ｜ 原生层 %s（客户端自己又 Show 出来了；已 Hide + alpha 0）",
-                recO.again, tostring(file), tostring(recO.name)))
             end
           end
         end
@@ -2774,23 +2695,8 @@ MDQ.holdTick = function(file)  if not MDQ.swm() then return 0, 0, 0, 0, 0 end
   st.at = (type(GetTime) == "function") and GetTime() or 0
   -- ★1.75.59m **自愈出声**（本会话只一次）：我们自己的画布被上一版（1.75.59l）误判成原生层藏过 + alpha 归零
   --   ⇒ 这一拍已经把它们 `Show` 回来、alpha 也还原成不透明；**如实说清是「按不透明还原」而不是「按原值」**。
-  if fixA > 0 and not MDQ.saidAlphaHeal then
-    MDQ.saidAlphaHeal = true
-    pcall(MDQ.staleLogPut, string.format("自愈：地图=%s ｜ 把我们自己的 **%d** 个画布层的 alpha 从 0 还原成不透明", tostring(file), fixA))
-    pcall(fogSay, "接管守护自愈：把我们自己的 **%d** 个画布层还原成不透明（上一版把「枚举里认不出我们画的」误判成"
-      .. "「客户端原生」⇒ 连我们画的也被 Hide + alpha 0 了；现在按序号认画布，不再误伤）", fixA)
-  end
   -- ★「客户端又把它 Show 出来了」正是用户报障的那条现象 ⇒ **必须出声**（常开出口），但**每图只一次**
   --   （逐帧重申那一拍 + 客户端每次重摆都可能命中它，不节流就是刷屏）。
-  if again > 0 then
-    local mkA = mapKey() or tostring(file)
-    if MDQ.holdSaidAgain ~= mkA then
-      MDQ.holdSaidAgain = mkA
-      pcall(fogSay, "接管守护：地图=%s ｜ 客户端又把 **%d** 个原生探索层 Show 出来了 ⇒ **已当场再藏**"
-        .. "（守护每拍都查：① 数量 = 表推本图 %d 块；② 存在性 = 超出块数的池位一律藏）",
-        tostring(file), again, want)
-    end
-  end
   return hid, reshow, seen, want, again
 end
 
@@ -2809,7 +2715,6 @@ MDQ.holdShowAll = function(why)
   end
   MDQ.holdOrder = {}
   if n > 0 then
-    pcall(fogLog, "接管守护（%s）：把藏过的 %d 个客户端原生探索层全部 Show 还回（有原值的按原值还原）", tostring(why), n)
   end
   return n
 end
@@ -3267,199 +3172,10 @@ MDQ.trialStop = function(why)
 end
 
 
--- ★★★1.75.59l：**一条命令自检**（用户：「你能不能准备一条命令.我打开地图配合你运行.直接自己跑完.
---   存储到日志.然后自己已排查」）⇒ `/ehm mapfit 自检`（别名 `selfcheck` / `全诊`）：
---   · **一次跑完全部只读取数**（★不写地图、不改几何、**绝不调 `holdTick`** —— 守护本来就在节拍里跑，
---     这里只**观察它跑过的结果**）：渲染账 / 枚举逐条（对象类型·父级·显隐·贴图·尺寸·alpha·谁的·是否在 `_G`）/
---     我方活句柄逐条（在哪·显隐·贴图·**在不在枚举里**）/ 客户端帧结构样本 / alpha API 探针 / 守护上一拍账 / 一句话结论；
---   · 全文写进**有界落盘环** `EH_REALISTICMAP_CFG.fitDiag`（上限 500 行）⇒ `/reload` 落盘后 AI **直接读存档**排查；
---   · 聊天框只回显**少量关键行**（防刷屏）+ 提示 `/reload`。
-MDQ.FIT_DIAG_MAX = 500
--- ★1.75.59m：自检跑完**等几秒再自动重载**（`/reload` 会清空聊天框 ⇒ 立刻重载 = 回显当场被抹掉）
-MDQ.SELF_RELOAD_SEC = 6
-MDQ.selfReloadAt = nil
-MDQ.fitDiagPut = function(lines)
-  local ring = ERM_CFG.fitDiag
-  if type(ring) ~= "table" then ring = {} ERM_CFG.fitDiag = ring end
-  local stamp = (type(date) == "function") and tostring(date("%m-%d %H:%M:%S")) or "?"
-  table.insert(ring, string.format("===== 自检 %s ｜ 改动记号 %s ｜ 共 %d 行（读法：从后往前看最后一组）=====",
-    stamp, tostring(MDQ.BUILD), table.getn(lines)))
-  for _, l in ipairs(lines) do table.insert(ring, tostring(l)) end
-  while table.getn(ring) > (tonumber(MDQ.FIT_DIAG_MAX) or 500) do table.remove(ring, 1) end
-  return table.getn(ring)
-end
-
--- 单对象一行读数（**全部 pcall**：本客户端某个读口缺席时如实写「读不到」，绝不抛错打断整份自检）
-local function objLine(tag, i, o, regs)
-  local function g(m)
-    if o == nil or type(o[m]) ~= "function" then return "读不到" end
-    local ok, v = pcall(o[m], o)
-    if not ok then return "读不到" end
-    return v
-  end
-  local nm = frameName(o)
-  local ot = g("GetObjectType")
-  local pa = g("GetParent")
-  local paN = "?"
-  if pa ~= nil and pa ~= "读不到" then paN = tostring(frameName(pa) or "无名") end
-  local sh = g("IsShown")
-  local tx = g("GetTexture")
-  local w, h = g("GetWidth"), g("GetHeight")
-  local al = g("GetAlpha")
-  local idx = MDQ.poolIdx(o)
-  local inG = "否"
-  if idx ~= nil and rawget(_G, "WorldMapOverlay" .. tostring(idx)) == o then inG = "是" end
-  local inEnum = "否"
-  if regs ~= nil then
-    for _, r in ipairs(regs) do if r == o then inEnum = "是" break end end
-  end
-  return string.format("%s#%d 名=%s 序号=%s 类型=%s 父=%s 显示=%s 贴图=%s 尺寸=%sx%s alpha=%s 谁的=%s 在_G=%s 在枚举=%s",
-    tag, i, tostring(nm), (idx ~= nil) and tostring(idx) or "-", tostring(ot), paN,
-    (sh == true) and "是" or ((sh == false) and "否" or tostring(sh)), tostring(tx),
-    tostring(w), tostring(h), tostring(al),
-    MDQ.oursOf(o, idx) and "我们" or "客户端", inG, inEnum)
-end
-
-MDQ.fitBattery = function()
-  local out = {}
-  local function add(s) table.insert(out, s) end
-  local file = tostring(select(1, mapInfo()) or "")
-  local fr = _G["WorldMapDetailFrame"]
-  local want = MDQ.holdN(file ~= "" and file or nil)
-  local es = nil
-  if fr ~= nil then
-    local okE, v = pcall(effScale, fr)
-    if okE and tonumber(v) then es = tonumber(v) end
-  end
-  -- ===== ① 环境与渲染账 =====
-  add(string.format("[1] 环境：改动记号=%s ｜ 地图=%s ｜ 开关=%s ｜ 表推本图应有 %d 块 ｜ 本拍渲染 %d 块 ｜ es=%s ｜ 引擎自报叠加层=%s",
-    tostring(MDQ.BUILD), (file ~= "" and file or "?"), MDQ.swm() and "开" or "关", want, tonumber(MDQ.lastRenderN) or 0,
-    es and string.format("%.3f", es) or "读不到", tostring(numOverlays())))
-  local rr = MDQ.lastRender
-  if type(rr) == "table" then
-    add(string.format("[1] 渲染账：地图=%s 表里 %d 区 ⇒ %d 块（在表里=%s 渲完整=%s 倍率 k=%.3f）%s",
-      tostring(rr.map or "?"), tonumber(rr.areas) or 0, tonumber(rr.n) or 0, rr.inTbl and "是" or "否",
-      rr.full and "是" or "否", tonumber(rr.k) or 1, rr.why and (" ｜ " .. tostring(rr.why)) or ""))
-  end
-  -- ===== ② 枚举逐条（上限 60；这是判「客户端那批到底是什么」的主证据）=====
-  local regs = {}
-  local okr = false
-  if (type(fr) == "table" or type(fr) == "userdata") and type(fr.GetRegions) == "function" then
-    okr, regs = pcall(function() return { fr:GetRegions() } end)
-    if not okr then regs = {} end
-  end
-  local nTex, nFrame, nOther, nAnon = 0, 0, 0, 0
-  for _, o in ipairs(regs) do
-    local ot = "?"
-    if o ~= nil and type(o.GetObjectType) == "function" then
-      local ok, v = pcall(o.GetObjectType, o)
-      if ok then ot = tostring(v) end
-    end
-    if ot == "Texture" then nTex = nTex + 1 elseif ot == "Frame" then nFrame = nFrame + 1 else nOther = nOther + 1 end
-    local nm = frameName(o)
-    if nm == nil or tostring(nm) == "" or tostring(nm) == "?" then nAnon = nAnon + 1 end
-  end
-  add(string.format("[2] region 总数=%d（Texture %d ／ Frame %d ／ 其它 %d ／ **无名 %d**）",
-    table.getn(regs), nTex, nFrame, nOther, nAnon))
-  local nPool, shown = 0, 0
-  for k, o in ipairs(regs) do
-    if o ~= nil and MDQ.stalePoolName(o) then
-      nPool = nPool + 1
-      local oks, sh = pcall(o.IsShown, o)
-      if oks and sh == true then shown = shown + 1 end
-      if nPool <= 60 then add("[2] " .. objLine("枚举", nPool, o, regs)) end
-    end
-  end
-  add(string.format("[2] 名字族 WorldMapOverlay*：**%d** 条（显示中 %d）", nPool, shown))
-  -- ===== ③ 我方活句柄逐条（上限 40）——「我们在哪、在不在枚举里」=====
-  local holdN, liveHit = 0, 0
-  for i = 1, (tonumber(MDQ.poolSeen) or 0) do
-    local t = rawget(_G, "WorldMapOverlay" .. tostring(i)) or MDQ.own[i]
-    if t ~= nil then
-      holdN = holdN + 1
-      local inEnum = false
-      for _, r in ipairs(regs) do if r == t then inEnum = true break end end
-      if inEnum then liveHit = liveHit + 1 end
-      if holdN <= 40 then
-        add("[3] " .. objLine("我方", i, t, regs) .. string.format(" self-made=%s ownSet=%s wroteObj=%s",
-          (MDQ.own[i] == t) and "是" or "否", (MDQ.ownSet[t] == true) and "是" or "否", (MDQ.wroteObj[t] == true) and "是" or "否"))
-      end
-    end
-  end
-  add(string.format("[3] 我方活句柄 **%d** 条 ｜ **出现在枚举里的 %d 条**（0 ⇒ 枚举的是另一批对象）", holdN, liveHit))
-  -- ===== ④ 客户端帧结构样本（客户端真正的叠加层挂在哪）=====
-  if (type(fr) == "table" or type(fr) == "userdata") and type(fr.GetChildren) == "function" then
-    local okc, kids = pcall(function() return { fr:GetChildren() } end)
-    if okc then
-      add(string.format("[4] WorldMapDetailFrame 子件 %d 个（前 20 个）：", table.getn(kids)))
-      for k = 1, math.min(20, table.getn(kids)) do
-        local c = kids[k]
-        local cn, ct = frameName(c), "?"
-        if c ~= nil and type(c.GetObjectType) == "function" then
-          local ok, v = pcall(c.GetObjectType, c)
-          if ok then ct = tostring(v) end
-        end
-        add(string.format("[4]   子#%d 名=%s 类型=%s", k, tostring(cn or "无名"), tostring(ct)))
-      end
-    end
-  end
-  -- ===== ⑤ alpha API 探针（只读）=====
-  for _, l in ipairs(MDQ.alphaProbe()) do add("[5] " .. tostring(l)) end
-  -- ===== ⑥ 守护上一拍账 + 一句话结论（都只读）=====
-  local st = MDQ.holdStat or {}
-  add(string.format("[6] 守护上一拍：藏原生 %d ｜ 又冒出来再藏 %d ｜ 复位我们的画布 %d ｜ 自愈 alpha %d ｜ 枚举池位 %d ｜ 认出我们画的 %d ｜ 盲=%s ｜ 原生藏账 %d 条",
-    tonumber(st.hid) or 0, tonumber(st.again) or 0, tonumber(st.reshow) or 0, tonumber(st.fixa) or 0,
-    tonumber(st.seen) or 0, tonumber(st.ours) or 0, st.blind and "是" or "否", MDQ.holdLedgerN()))
-  for _, l in ipairs(MDQ.holdVerdict()) do add("[7] " .. tostring(l)) end
-  -- ===== ⑨ 本游戏专属坐标补偿（与 `MapOverlayData.lua` 配对）=====
-  --   ★1.75.59o：编辑模式拖出来的补偿逐条进自检落盘环 ⇒ **AI 读存档就能拿到全部数字**（不让玩家转述）。
-  do
-    local mine, tot = MDQ.editCount(file)
-    add(string.format("[9] 迷雾补偿（编辑模式）：开关=%s ｜ 本图 **%d** 条 / 全部 %d 条 ｜ 落盘历史 %d 条"
-      .. "（存 EH_REALISTICMAP_CFG.edit / editLog；`x,y` = 表口径补偿，最终坐标 = 表值 + 补偿）",
-      (MDQ.editOn and MDQ.editOn()) and "开" or "关", mine, tot, MDQ.editLogN()))
-    if mine > 0 then
-      local jn = MDQ.editJoin(file)
-      add(string.format("[9] 配对 MapOverlayData.lua：命中 %d ｜ 孤儿（查不到 ⇒ 不生效）%d ｜ 基础表已变 %d",
-        tonumber(jn.hit) or 0, tonumber(jn.orphan) or 0, tonumber(jn.drifted) or 0))
-      local per = MDQ.editMap(file, false)
-      local k2 = 0
-      local keys = {}
-      for key in pairs(per or {}) do table.insert(keys, tostring(key)) end
-      table.sort(keys)
-      for _, key in ipairs(keys) do
-        if k2 >= 12 then break end
-        local r = per[key]
-        if type(r) == "table" then
-          k2 = k2 + 1
-          local base = nil
-          local a, tn = string.match(key, "^(.-)#(%d+)$")
-          local mm = MDQ.areaOf(file)
-          if type(mm) == "table" and a ~= nil then base = mm[a] end
-          local bx, by = nil, nil
-          if base ~= nil then bx, by = select(3, MDQ.expectRect(base, tonumber(tn) or 1)) end
-          add(string.format("[9] 　%s ｜ 表值 %s,%s ＋ 补偿 x=%+.1f y=%+.1f ⇒ 最终 %s,%s ｜ k=%s es=%s ｜ %s",
-            key, tostring(r.bx or bx), tostring(r.by or by), tonumber(r.x) or 0, tonumber(r.y) or 0,
-            tostring((tonumber(bx) or 0) + (tonumber(r.x) or 0)), tostring((tonumber(by) or 0) + (tonumber(r.y) or 0)),
-            tostring(r.k), tostring(r.es), tostring(r.t or "?")))
-        end
-      end
-      if mine > 12 then add(string.format("[9] 　… 还有 %d 条（全量在存档 EH_REALISTICMAP_CFG.edit）", mine - 12)) end
-    end
-  end
-  -- ===== ⑩ 同序号重复（★1.75.59q：真机截图「同一张图两份，一份可拖、一份拖不动」）=====
-  add(string.format("[10] 同序号重复：本拍 %d 组 ｜ 藏掉「另一张纹理」%d 条 ｜ 判为同一张纹理的别名 %d 条 ｜ 判不出 %d 组"
-    .. "（判据 = **属性往返探针**，不是对象 `==`；判不出就一个字节都不碰）",
-    tonumber(MDQ.dupStat.groups) or 0, tonumber(MDQ.dupStat.hid) or 0,
-    tonumber(MDQ.dupStat.same) or 0, tonumber(MDQ.dupStat.blind) or 0))
-  add(string.format("[8] 读法：先看 [2]（客户端那批是什么）+ [3]（我们在不在枚举里）+ [7]（结论）；[2]/[3] 的类型/父级决定「该藏谁」。"))
-  return out
-end
-
 -- ★★★1.75.54 **性能体检**（`/ehm mapfit perf`；用户报障「开了十几个地区以后游戏会卡死」换来的取证口）：
 --   ★口令是「体检」不是「只读」—— 它**真跑两拍**（与正常节拍完全相同的那条路：渲染 + 护守），会写地图层。
 --   为什么这么设计：卡顿只有在**真跑**时才量得出来（离线 harness 只能数调用次数，量不到引擎真实耗时）。
---   读数同时进**有界落盘环** `ERM_CFG.perfProbe`(40) ⇒ AI 读存档即可判「有没有慢拍 / 哪一拍慢 / 写了几次」。
+--   ★0.2.8：落盘环 `ERM_CFG.perfProbe` 已删 ⇒ 读数**只回显聊天框**（要留证就自己复制）。
 MDQ.perfProbe = function()
   local out = {}
   local file = tostring(select(1, mapInfo()) or "")
@@ -3506,13 +3222,6 @@ MDQ.perfProbe = function()
     .. "**第 2 拍（逐帧拍）该「写 0 次」** = 写前比对生效（逐帧那条路才省开销）；"
     .. "若第 2 拍还在写 ⇒ 有东西每拍在变（报给作者看这两行）；单拍 > 12ms ⇒ 会自动降档（逐帧重申停掉）。")
   table.insert(out, "　★地区多导致叠加层多时：护守每拍要枚举全部 region（只读），这是**节流拍**才做的事（0.1s/0.3s）。")
-  if type(ERM_CFG) == "table" then
-    if type(ERM_CFG.perfProbe) ~= "table" then ERM_CFG.perfProbe = {} end
-    local ring = ERM_CFG.perfProbe
-    table.insert(ring, string.format("[%s] %s ｜ %s", date and tostring(date("%H:%M:%S")) or "?", tostring(file), table.concat(rows, " ｜ ")))
-    while table.getn(ring) > 40 do table.remove(ring, 1) end
-  end
-  for _, l in ipairs(out) do pcall(fogLog, "[perf] %s", l) end
   return out
 end
 
@@ -3536,7 +3245,7 @@ MDQ.cacheClear = function(why)
       if ERM_CFG[k] ~= nil then ERM_CFG[k] = nil n = n + 1 end
     end
   end
-  pcall(fogLog, "清缓存（%s）：存档老键 %d 个（原值/写入账那些会话内存已随探索层适配整条摘除）", tostring(why), n)
+  -- 0.2.8：这一行原本进取证环，现已随日志整族删除
   return n
 end
 
@@ -3567,15 +3276,22 @@ local TS = { open = false, mapKey = nil, burst = 0, burstN = 0, rearmAt = 0, eng
 --   为什么必须加：`MDQ.tick` / `MDQ.editViewApply` 里的渲染都是 `pcall(MDQ.renderCurrent, …)` ——
 --   只要它中途抛一次错，**地图就永远停在上一次画好的那一张上**，而聊天框一个字都没有；
 --   用户眼里的现象正是「切了图层没反应 / 点了没反应」（与「点没点到」长得一模一样，无从分辨）。
---   口径：**同一条错误只出声一次**（不刷屏），同时进有界取证环 `fogLog`（关掉调试日志也留有证据）。
+--   口径：**同一条错误只出声一次**（不刷屏）。
+--   ★0.2.8：取证环已删；这一行是**真实故障信号** ⇒ 走**不门控**的 `EVAL_SAY_FORCE`
+--     （与命令回显同一口径：被「调试日志」挡下来的话，用户看到的就是「地图卡住且不吭声」）。
 function MDQ.renderErrSay(err)
   local msg = tostring(err or "?")
   if type(MDQ.renderErrSeen) ~= "table" then MDQ.renderErrSeen = {} end
   if MDQ.renderErrSeen[msg] then return false end
   MDQ.renderErrSeen[msg] = true
-  pcall(fogLog, "[mapfit] 渲染出错：%s", msg)
-  pcall(fogSay, "世界迷雾：**渲染这一拍出错了** ⇒ 地图会停在上一次画好的画面上（这就是「切了图层没反应」的样子）。"
-    .. "错误：%s ｜ 请把这一行发给我", msg)
+  -- ★拼串不用 `string.format`：`msg` 是引擎/客户端抛出来的原文，里面出现 `%` 就会把格式串打坏。
+  local line = ADDON_TAG .. "世界迷雾：**渲染这一拍出错了** ⇒ 地图会停在上一次画好的画面上"
+    .. "（这就是「切了图层没反应」的样子）。错误：" .. msg .. " ｜ 请把这一行发给我"
+  local out = rawget(_G, "EVAL_SAY_FORCE")
+  if type(out) == "function" then pcall(out, line) return true end
+  if type(DEFAULT_CHAT_FRAME) == "table" and DEFAULT_CHAT_FRAME.AddMessage then
+    pcall(DEFAULT_CHAT_FRAME.AddMessage, DEFAULT_CHAT_FRAME, line)
+  end
   return true
 end
 
@@ -3617,26 +3333,6 @@ MDQ.tick = function(es, dt, open, mk)
         hidS, backS = tonumber(hidS) or 0, tonumber(backS) or 0
         TS.staleHidN = (tonumber(TS.staleHidN) or 0) + hidS
         TS.staleBackN = (tonumber(TS.staleBackN) or 0) + backS
-        if hidS > 0 or backS > 0 then
-          pcall(fogLog, "残留图层：地图=%s（%s）｜ 本拍藏 %d 个叠加层 ｜ 还回 %d 个 ｜ 看过池位 %d 个 ｜ 藏账还留 %d 条",
-            tostring(fileS), tostring(lvlWhyS or "?"), hidS, backS, tonumber(seenS) or 0, tonumber(nLed) or 0)
-        end
-        -- ★一个池位都没认出 ⇒ 每图出声一次（判据与真机对不上若静默，用户会以为修好了而残留照旧）
-        --   ★「让位」那一拍不许出声（那时 staleTick 根本没干活，seenS==0 是让位不是「名字对不上」）。
-        local stood = string.find(tostring(lvlWhyS or ""), "接管守护", 1, true) ~= nil
-        if (not TS.staleSaidNoPool) and (not stood) and (tonumber(seenS) or 0) == 0 and hidS == 0 then
-          TS.staleSaidNoPool = true
-          pcall(fogSay, "残留图层清理：地图=%s（%s）**没认出任何 WorldMapOverlay 池位** ⇒ 这一档什么都没藏"
-            .. "（图上若仍有残留，请敲 `/ehm mapfit 残留` 把首行发我 —— 那行有真机上的纹理名）",
-            tostring(fileS), tostring(lvlWhyS or "?"))
-        end
-        if (not TS.staleSaid) and (tonumber(TS.staleHidN) or 0) > 0 then
-          TS.staleSaid = true
-          pcall(fogSay, "残留图层清理：地图=%s（%s）｜ 已藏 **%d** 个叠加层：%s"
-            .. "（**本图没有探索层数据** ⇒ 全藏、只 Hide 不改几何；**切到有数据的区域图会全部还回**；全量见 /ehm mapfit 残留）%s",
-            tostring(fileS), tostring(lvlWhyS or "?"), tonumber(TS.staleHidN) or 0, MDQ.staleNames(8),
-            ((tonumber(TS.staleBackN) or 0) > 0) and ("；期间已还回 " .. tostring(TS.staleBackN) .. " 个") or "")
-        end
       end
     end
   end
@@ -3709,27 +3405,6 @@ do
       --   ★排在 `swm()` 那道闸门**之前**：万一拖到一半开关被关掉，最后那一下也要能正常收尾
       --     （绝不把「拖拽中」的状态留在内存里）。没在拖时 `editTick` 只做一次 nil 判断。
       if (type(MDQ.dragSt) == "table") or (MDQ.editOn and MDQ.editOn()) then pcall(MDQ.editTick) end
-      -- ★★★1.75.59m：**自检的「延后落盘」**（用户真机反馈：「执行直接重载了.然后啥事没干」——
-      --   聊天框会被 `/reload` 清空 ⇒ 立刻重载等于把回显当场抹掉）⇒ 改成**约定时刻**在这里执行：
-      --   命令只盖一个时间戳（`MDQ.selfReloadAt`），到点由本行 `ReloadUI`；`beatSync` 在有待办时也会挂节拍。
-      local srAt = tonumber(MDQ.selfReloadAt)
-      if srAt ~= nil then
-        local nowT = (type(GetTime) == "function") and GetTime() or 0
-        if nowT >= srAt then
-          MDQ.selfReloadAt = nil
-          local okr = false
-          if type(RunScript) == "function" then okr = pcall(RunScript, "ReloadUI()") end
-          if not okr then
-            -- ★不许直接写 `pcall(say, …)`：`say` 是本文件**后文**的 local ⇒ 这里会绑成全局 nil 被 pcall 静默吞掉
-            --   （本项目「前向声明老雷」；这条路上必须用 `_G` 现取出口）。
-            local sf = rawget(_G, "EVAL_SAY_FORCE") or rawget(_G, "EVAL_SAY")
-            if type(sf) == "function" then
-              pcall(sf, "[mapfit] [自检] ⚠️ 自动重载没成功 ⇒ 请你**手动 `/reload`** 一次（之后 AI 就能读到全文）")
-            end
-          end
-          return
-        end
-      end
       if not MDQ.swm() then return end          -- ★关着：本拍零动作（早于任何探测/读写）
       local dt = tonumber(arg1) or 0.05
       local open = mapOpen()   -- ★桥一律走 pcall 包装（契约 ⑤；旧写法裸调宿主桥，桥抛错会冒到这里）
@@ -3759,10 +3434,9 @@ MDQ.beatSync = function()
   if MDQ.wfFrame == nil or MDQ.wfBeat == nil then return false end
   -- ★1.75.59j：**实验在跑时也要挂**（用户敲的实验自带时限、到期必还原）——
   --   载入期这条判据仍然是「开关 ∨ 实验」都为假 ⇒ 默认不勾选的用户照旧**一帧空节拍都不跑**。
-  -- ★1.75.59m：**自检的延后落盘待办也要挂**（开关关着时也得有人执行那次 `ReloadUI`）。
   -- ★1.75.59o：**编辑模式开着也要挂**（那是用户显式选中的模式，不是「默认开」的空转）——
   --   拖拽的推进（`MDQ.editTick`）走的就是这一帧（一个模块只许一个节拍帧）。
-  if MDQ.swm() or (MDQ.editOn and MDQ.editOn()) or (MDQ.trialActive and MDQ.trialActive()) or (tonumber(MDQ.selfReloadAt) ~= nil) then
+  if MDQ.swm() or (MDQ.editOn and MDQ.editOn()) or (MDQ.trialActive and MDQ.trialActive()) then
     pcall(MDQ.wfFrame.SetScript, MDQ.wfFrame, "OnUpdate", MDQ.wfBeat)
   else
     pcall(MDQ.wfFrame.SetScript, MDQ.wfFrame, "OnUpdate", nil)
@@ -3787,12 +3461,12 @@ end
 --   **命令回显窗口** —— `MDQ.cmd` 入口盖章（截止 = 现在 + `ECHO_SEC`）。窗口内本模块的 `say`
 --   走**不门控**的 `EVAL_SAY_FORCE`（你问它答必须可见）；窗口外照旧走受门控的 `EVAL_SAY`。
 --   ★用时间戳而不是布尔标志：命令分支有多个 `return`，标志漏清就会「此后自动播报都漏出来」。
---   ★自动播报（残留清理 / 守护 / 渲染自证走的是桥 `EVAL_SM_FITSAY` = SimpleMap 的 `fogSay`）
+--   ★0.2.8：自动播报与取证环已整条删除（只有命令/按钮回显 + 渲染抛错一行）
 --     由 SimpleMap 那边统一门控 ⇒ 本文件**不需要**第二份门控（一处真值）。
 -- ★前向声明在文件顶部（`local say, L, ECHO_SEC, ECHO_AT`）⇒ 这两行改**赋值**，别写回 `local`
 --   （写回 = 编辑模式那些按钮闭包写的是另一份、`echoing()` 读的还是这份 ⇒ 盖章永远不生效 = 点了像没反应）
 -- ★★2026-10-10 迁移：`ECHO_SEC` / `ECHO_AT` / `echoing()` 已搬到**文件头部**的前向声明段
---   —— 本插件自己的播报出口（`fogSay`/`fogSayV`）在很前面就要判「是不是处于命令回显窗口」。
+--   —— 回显窗口（`ECHO_AT`）在很前面就要判「是不是处于命令回显窗口」。
 --   ★别再在这里重复定义（同一个函数名定义两次 = 后者静默顶掉前者，`luacheck` 一个字都不报）。
 -- ★前向声明在文件顶部（`local say, L`）⇒ 这里改**赋值**（`say = function(...)`），别写回 `local function`
 --   （★这条不是洁癖：编辑模式整族都在这句**上面**，写回 `local` = 它们的播报全绑全局 nil）
@@ -3871,6 +3545,8 @@ end
 --     下一拍 `texAt` 必然**新建一个干净对象**（新建对象一定会重新上传图像），旧对象已经藏起来、不会盖在上面。
 --   ★只动**我们自己建的**（`MDQ.own` + 同名 `_G` 就是我们那个时才摘）—— 客户端的池位一个字都不许碰。
 --   ★代价如实：每切一次多一个常驻对象（1.12 没有销毁纹理的 API），旧的都处于隐藏状态、不再被引用。
+-- ★0.2.14（F）：本函数**默认不被调用**（`MDQ.SWAP_OBJ_ON_SWITCH = false`，见 `layerSet`）；
+--   里面「抹全局名」那半句已撤 ⇒ 即便有人把常量改回 true，也**不会**再动客户端的名字。
 MDQ.dropOwnForSwitch = function()
   local n = 0
   for k, t in pairs(MDQ.own or {}) do
@@ -3878,8 +3554,9 @@ MDQ.dropOwnForSwitch = function()
       pcall(t.Hide, t)
       MDQ.ownSet[t] = nil
       MDQ.own[k] = nil
-      local nm = "WorldMapOverlay" .. tostring(k)
-      if rawget(_G, nm) == t then rawset(_G, nm, nil) end
+      -- ★★★0.2.14（F）：**绝不抹客户端的全局绑定** —— 旧写法「名字指着我们就 `rawset(_G, nm, nil)`」抹掉的
+      --   是**客户端自己也用的池位名** ⇒ 客户端随后按名字取不到对象（本机那条「跳到无人区执行」的崩溃族）。
+      --   现在这里只 `Hide` 我们自己的对象，**一个全局名都不动**。
       n = n + 1
     end
   end
@@ -3933,7 +3610,7 @@ end
 --   命令 `/ehm mapfit 编辑 [on|off|配对|清|清全部]`（等价入口，同一个写口 `MDQ.editSet`）。
 -- 关断（项目「关断四件事」）：关编辑模式 ⇒ **柄全部收起 + 拖拽当场结束 + 节拍按需真摘**；
 --   补偿数据**保留**（那是用户的数据，不是会话状态）；另有 `编辑 清` / `编辑 清全部` 两条显式清理路。
-MDQ.EDIT_LOG_MAX = 40    -- 「补偿记了什么」的**有界落盘环**上限（`EH_REALISTICMAP_CFG.editLog`，最新在前）
+
 MDQ.EDIT_MAX = 1200      -- 补偿表条数上限（表本身最多 1019 块，这道门只防病态存档）
 
 -- 补偿表读写（**唯一入口**；别在别处直接碰 `ERM_CFG.edit`）
@@ -3952,20 +3629,23 @@ MDQ.EDIT_MAX = 1200      -- 补偿表条数上限（表本身最多 1019 块，�
 --     ④ **立刻刷一拍**（`editViewApply` = 与正常节流同一路：quiet + silent + withGuard）⇒ **切换当场生效、不用 /reload**。
 --   返回：是否真的切了, 现模式
 MDQ.layerSet = function(mode, quiet)
-  -- ★★★2026-10-10：**「区域彩图」已删除** ⇒ 任何「切到彩图」的入口（老命令 `/erm 图层 彩图` / 老菜单 /
-  --   别处误接）都**如实拒绝并给出理由**，绝不静默掉回别的档 —— 静默降级正是本项目最怕的那类失效。
-  if mode == MDQ.LAYER_ART then
+  -- ★★★0.2.11（用户：「切换原始图功能调整到采用 MapOverlayOffset.lua MapOverlayData.lua media\WorldMap 内的
+  --   贴图载入模式…现在将这个功能在增加回来」）：**第三档「原始图」回来了** —— 路 = 逐区域逐块（搬迁前那条）。
+  --   ⇒ 0.2.9 的合成整区 JPG 口径（id `"src"`）**并入本档**：旧 id 在这里就地归一（存盘也写 `"art"`）。
+  if mode == MDQ.LAYER_SRC then mode = MDQ.LAYER_ART end
+  if (mode ~= MDQ.LAYER_JPG) and (mode ~= MDQ.LAYER_PAINT) and (mode ~= MDQ.LAYER_ART) then return false, MDQ.layerMode() end
+  -- ★临时关闭的档：如实拒绝（**绝不静默降级**；功能与素材都保留，见 `MDQ.LAYER_OFF`）
+  if not MDQ.layerOn(mode) then
     if not quiet then
-      say("世界迷雾·图层类型：**「区域彩图」这一层已删除**（现在的两档 = **区域实景** `media\\WorldMapJpg\\<图>_re.jpg` "
-        .. "与**图层彩绘** `media\\WorldMapPaint\\<图>_cn.jpg`）。想要游戏自带那张手绘彩图 = 取消本行勾选，用客户端原始地图")
+      say(string.format(L("ERM_LAYER_OFF"), L(MDQ.layerNameKey(mode))))
     end
     return false, MDQ.layerMode()
   end
-  if (mode ~= MDQ.LAYER_JPG) and (mode ~= MDQ.LAYER_PAINT) then return false, MDQ.layerMode() end
   local cur = MDQ.layerMode()
   if cur == mode then
     if not quiet then
-      say(string.format("世界迷雾·图层类型已经是「%s」（没有变化）", MDQ.frameLabel()))
+  -- ★0.2.17（用户：「子插件 实景地图 清理下切换日志」）：切换日志已清理，要看状态敲 `/erm 图层`
+  -- say(string.format("世界迷雾·图层类型已经是「%s」（没有变化）", MDQ.frameLabel()))
     end
     return false, cur
   end
@@ -3988,14 +3668,22 @@ MDQ.layerSet = function(mode, quiet)
   --   本客户端的渲染器**不会**因为「同一个对象上又 SetTexture 了一次」而重新上传图像 ⇒
   --   必须换对象（或让它的显隐真正跨帧变一次）。这一步放在 `release` **之后**：
   --   `release` 先把我们自建的层都 Hide 了，这里再把句柄摘掉，下一拍就必然 `create` 一个干净对象。
-  if type(MDQ.dropOwnForSwitch) == "function" then pcall(MDQ.dropOwnForSwitch) end
+  -- ★★★0.2.13（用户：「先修A 试下」）：**切档不再丢句柄 / 不再重建对象**（A 号主嫌，第一刀）。
+  --   旧写法每次 `layerSet` 都走这里 ⇒ 把 N 个句柄（`MDQ.own[k]`）+ 身份账（`ownSet[t]`）+ 全局名
+  --   （`_G["WorldMapOverlay<k>"]`）**一起摘掉**（只 `Hide`）⇒ 下一拍 `MDQ.texAt` 只能 `CreateTexture`
+  --   **N 个全新对象**（N = 本图块数；「原始图」档下几十个，如 Barrens 84 块），而 1.12 **没有销毁纹理的 API**
+  --   ⇒ 旧对象永远留在 `WorldMapDetailFrame` 下、仍在 `GetRegions()` 枚举里 ⇒ **越切越卡**。
+  --   ★依据：0.2.7 真机已实测「**改名（`_re`/`_cn`/`_src`）才是真解**」⇒ 0.2.6 那条「必须换新对象」**已被推翻**
+  --     ⇒ 这一步本来就是死重。**要放回来 = 把下面这个常量改成 true（一个字）**；`MDQ.dropOwnForSwitch` 本体保留。
+  --   ★如实边界：本版只做了 A（B/C/D/F 都没动）⇒ 若切档后画面**不刷新**，说明这一刀不能单独下，立刻回退。
+  if MDQ.SWAP_OBJ_ON_SWITCH == true and type(MDQ.dropOwnForSwitch) == "function" then pcall(MDQ.dropOwnForSwitch) end
   if type(ERM_CFG) == "table" then ERM_CFG.layerMode = mode end
   MDQ.blkHide = {}
   MDQ.hoverIdx = nil
   MDQ.flashIdx, MDQ.flashAt = nil, 0
   MDQ.holdNCache = {}
   MDQ.lastRender, MDQ.lastRenderN = nil, 0
-  MDQ.saidMk = nil
+
   if MDQ.editViewApply then pcall(MDQ.editViewApply) end
   if type(MDQ.beatSync) == "function" then pcall(MDQ.beatSync) end
   if MDQ.editRefresh then pcall(MDQ.editRefresh) end
@@ -4003,11 +3691,18 @@ MDQ.layerSet = function(mode, quiet)
   -- ★★★2026-10-11：顶栏那个快捷切换按钮的文案按**新真值**重画（真值只有一处 ⇒ 按钮永远与真值一致）
   if type(MDQ.mapBtnSync) == "function" then pcall(MDQ.mapBtnSync) end
   if not quiet then
-    say(string.format("世界迷雾·图层类型 = **%s**（已切换并**当场生效**，不用 /reload；两档的编辑补偿各存各的，一个字没动）",
-      MDQ.frameLabel()))
-    if MDQ.paintMode() and MDQ.paintTbl() == nil then
-      say("　★注意：**彩绘数据表 `MapOverlayPaintData.lua` 没载入** ⇒ 这一档本图不会接管"
-        .. "（客户端自己的地图保持原样）。体检：`/erm 图层`")
+    -- ★0.2.9（用户：「子插件 以上日志清理下」）：这一行**只留档名** —— 旧版那句长括号
+    --   「（已切换并**当场生效**，不用 /reload；两档的编辑补偿各存各的，一个字没动）」是排查期写的，
+    --   切换本来就是当场生效的，不必每次都对玩家说一遍（真机上它还折行）。
+  -- ★0.2.17（用户：「子插件 实景地图 清理下切换日志」）：切换日志已清理，要看状态敲 `/erm 图层`
+  -- say(string.format("世界迷雾·图层类型 = **%s**", MDQ.frameLabel()))
+    -- ★0.2.11：「原始图」= 逐区域逐块 ⇒ 它的数据表是 `MapOverlayData.lua`（与 `MDQ.artTbl` 同一份、rawget 懒读）
+    local tblOK = (MDQ.artMode() and rawget(_G, "EVAL_MAP_OVERLAY_DATA") ~= nil)
+      or (MDQ.paintMode() and MDQ.paintTbl() ~= nil)
+      or (MDQ.jpgMode() and MDQ.jpgTbl() ~= nil)
+    if not tblOK then
+      say(string.format("　★注意：**本档数据表 `%s` 没载入** ⇒ 这一档本图不会接管"
+        .. "（客户端自己的地图保持原样）。体检：`/erm 图层`", MDQ.frameTblName()))
     end
   end
   return true, mode
@@ -4019,10 +3714,14 @@ end
 --   **全部**只经由 `editTbl` + `editFileTbl` 两个口拿存储 ⇒ 换根即换套，**两套数据永不串味**
 --   （键形态也一字未改：仍是 `区域#块号`，实景那套的伪区域 = `MDQ.JPG_AREA`）。
 MDQ.EDIT_ROOT_ART, MDQ.EDIT_ROOT_JPG, MDQ.EDIT_ROOT_PAINT = "edit", "editJpg", "editPaint"
+MDQ.EDIT_ROOT_SRC = "editSrc"        -- ★2026-10-11：第三档「原始图」的补偿根（三档各存各的）
 MDQ.editTbl = function(make)
   if type(ERM_CFG) ~= "table" then return nil end
-  -- ★2026-10-11：三档各有各的根（`edit` / `editJpg` / `editPaint`）—— **补偿数据永不串味**
+  -- ★2026-10-11：各档各有各的根（`edit` / `editJpg` / `editPaint` / `editSrc`）—— **补偿数据永不串味**
   local key = MDQ.EDIT_ROOT_JPG
+  -- ★0.2.11：第三档「原始图」= 逐区域逐块 ⇒ 补偿根回到 `edit`（与搬迁前一致）
+  if MDQ.artMode() then key = MDQ.EDIT_ROOT_ART end
+  if MDQ.srcMode() then key = MDQ.EDIT_ROOT_SRC end
   if MDQ.paintMode() then key = MDQ.EDIT_ROOT_PAINT end
   local t = ERM_CFG[key]
   if type(t) ~= "table" then
@@ -4065,6 +3764,9 @@ end
 MDQ.editFileTbl = function()
   -- ★2026-10-11：与 `MDQ.editTbl` **同一个分派口径**（两处必须一致，否则「存档读 A、文件读 B」= 补偿串味）。
   local nm = "EVAL_MAP_OVERLAY_OFFSET_JPG"
+  -- ★0.2.11：第三档「原始图」的文件基线 = **`MapOverlayOffset.lua`**（与 `MDQ.editTbl` 同一分派口径）
+  if MDQ.artMode() then nm = "EVAL_MAP_OVERLAY_OFFSET" end
+  if MDQ.srcMode() then nm = "EVAL_MAP_OVERLAY_OFFSET_SOURCE" end
   if MDQ.paintMode() then nm = "EVAL_MAP_OVERLAY_OFFSET_PAINT" end
   local t = rawget(_G, nm)
   if type(t) ~= "table" then return nil end
@@ -4509,22 +4211,8 @@ MDQ.editJoin = function(file)
   return res
 end
 
--- 取证环（**有界**，最新在前；与 `staleLog` 分开，互不挤占）
-MDQ.editLogPut = function(line)
-  if type(ERM_CFG) ~= "table" then return 0 end
-  local t = ERM_CFG.editLog
-  if type(t) ~= "table" then t = {} ERM_CFG.editLog = t end
-  table.insert(t, 1, string.format("[%s] %s", (date and tostring(date("%m-%d %H:%M:%S")) or "?"), tostring(line)))
-  local max = tonumber(MDQ.EDIT_LOG_MAX) or 40
-  while table.getn(t) > max do table.remove(t) end
-  return table.getn(t)
-end
+-- 0.2.8：`ERM_CFG.editLog` 落盘环已整条删除（同「连取证环一起删」）。
 
-MDQ.editLogN = function()
-  local t = (type(ERM_CFG) == "table") and ERM_CFG.editLog or nil
-  if type(t) ~= "table" then return 0 end
-  return table.getn(t)
-end
 
 -- ===== 系数实测（★不猜单位）=====
 --   拿**我们真正写过的那张**纹理读回「逻辑宽」与「屏幕矩形宽」⇒ 链系数 = 屏测 ÷ 逻辑；
@@ -5280,10 +4968,6 @@ MDQ.editEnd = function(why)
   local fy = (tonumber(mem0 and mem0.by) or 0) + y0
   local mine, tot = MDQ.editCount(st.file)
   if nMem > 1 then
-    pcall(MDQ.editLogPut, string.format("补偿：地图=%s ｜ **整组 %d 块** ｜ 以 %s#%s 为例 表值 %s,%s ＋ 补偿 x=%+.1f y=%+.1f ⇒ **最终 %+.1f,%+.1f** ｜ 屏幕 %+.1f,%+.1f ｜ k=%.3f es=%.3f（%s）｜ 结束=%s",
-      tostring(st.file), nMem, tostring(st.area), tostring(st.tile), tostring(mem0 and mem0.bx), tostring(mem0 and mem0.by),
-      x0, y0, fx, fy, tonumber(rec0 and rec0.sx) or 0, tonumber(rec0 and rec0.sy) or 0,
-      tonumber(st.k) or 1, tonumber(st.es) or 1, tostring(st.src), tostring(why)))
     say(string.format("世界迷雾·编辑：**整组 %d 块**补偿已记（以「%s#%d」为例 ⇒ 表值 %s,%s ＋ x=%+.1f y=%+.1f = **最终 %+.1f,%+.1f**）"
       .. " ｜ 归零 %d 块 ｜ 本图 %d 条 / 全部 %d 条（当时 k=%.3f es=%.3f，存 `EH_REALISTICMAP_CFG.edit`）",
       nMem, tostring(st.area), tonumber(st.tile) or 0, tostring(mem0 and mem0.bx), tostring(mem0 and mem0.by),
@@ -5293,10 +4977,6 @@ MDQ.editEnd = function(why)
       tostring(st.area), tonumber(st.tile) or 0,
       (shadowN > 0) and string.format("（%d 块在文件基线上 ⇒ **显式写 0 影**压住 `MapOverlayOffset.lua`，这一块回到原始表值）", shadowN) or "（记录删除）"))
   else
-    pcall(MDQ.editLogPut, string.format("补偿：地图=%s ｜ %s#%s ｜ 表值 %s,%s ＋ 补偿 x=%+.1f y=%+.1f ⇒ **最终 %+.1f,%+.1f** ｜ 屏幕 %+.1f,%+.1f ｜ k=%.3f es=%.3f（%s）｜ 结束=%s",
-      tostring(st.file), tostring(st.area), tostring(st.tile), tostring(mem0 and mem0.bx), tostring(mem0 and mem0.by),
-      x0, y0, fx, fy, tonumber(rec0 and rec0.sx) or 0, tonumber(rec0 and rec0.sy) or 0,
-      tonumber(st.k) or 1, tonumber(st.es) or 1, tostring(st.src), tostring(why)))
     say(string.format("世界迷雾·编辑：「%s#%d」补偿已记 ⇒ 表值 %s,%s ＋ **x=%+.1f y=%+.1f** = **最终 %+.1f,%+.1f**（表口径）"
       .. " ｜ 屏幕 %+.1f,%+.1f（当时 k=%.3f es=%.3f）｜ 本图 %d 条 / 全部 %d 条（存 `EH_REALISTICMAP_CFG.edit`，AI 直接读）",
       tostring(st.area), tonumber(st.tile) or 0, tostring(mem0 and mem0.bx), tostring(mem0 and mem0.by), x0, y0, fx, fy,
@@ -5523,11 +5203,6 @@ MDQ.editLines = function()
   table.insert(out, string.format("　★配对 `MapOverlayData.lua`：本图 %d 条 ⇒ **命中 %d** ｜ 孤儿（查不到 ⇒ 不生效）%d ｜ 基础表已变 %d",
     tonumber(jn.n) or 0, tonumber(jn.hit) or 0, tonumber(jn.orphan) or 0, tonumber(jn.drifted) or 0))
   for _, l in ipairs(jn.items or {}) do table.insert(out, l) end
-  local t = (type(ERM_CFG) == "table") and ERM_CFG.editLog or nil
-  if type(t) == "table" and table.getn(t) > 0 then
-    table.insert(out, string.format("　落盘历史（`EH_REALISTICMAP_CFG.editLog`，最多 %d 条，最新在前）：", tonumber(MDQ.EDIT_LOG_MAX) or 40))
-    for i = 1, math.min(8, table.getn(t)) do table.insert(out, "　　" .. tostring(t[i])) end
-  end
   return out
 end
 
@@ -6556,7 +6231,6 @@ MDQ.nudge = function(dxScr, dyScr, what)
     --   （「调试日志」关着时也看得见；同 1.75.59p 的面板按钮口径）。抽块单跑时 wfEcho 不在切片里 ⇒ nil 跳过。
     if type(wfEcho) == "function" then pcall(wfEcho) end
     say("世界迷雾·编辑：箭头微调" .. extra .. " " .. line)
-    pcall(MDQ.editLogPut, "微调：" .. line .. extra)
   end
   return n, nSel, nMem, "ok"
 end
@@ -6777,7 +6451,6 @@ MDQ.sizeStep = function(which, fast)
     -- ★点尺寸按钮也是**用户主动操作** ⇒ 与点箭头 / 敲命令同等待遇：盖章打开回显窗口
     if type(wfEcho) == "function" then pcall(wfEcho) end
     say("世界迷雾·编辑：尺寸微调 " .. line)
-    pcall(MDQ.editLogPut, "尺寸：" .. line)
   end
   return 1, "ok"
 end
@@ -6827,58 +6500,29 @@ MDQ.cmd = function(sub)
   if type(GetTime) == "function" then ECHO_AT = GetTime() + ECHO_SEC end
   if sub == "残留" or sub == "stale" or sub == "残留层" or sub == "残留贴图" then
     -- ★1.75.59f：体检是**你敲的** ⇒ 除进取证环外**同时回显**（关着总闸门也看得到；上面已盖章）
-    for _, l in ipairs(MDQ.staleProbe()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.staleProbe()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "检查" or sub == "check" or sub == "体检" then
     -- ★1.75.59i：**一句话结论**（用户：「别让我看数字」）—— 见 `MDQ.holdVerdict` 的注释（只读、零副作用）
-    for _, l in ipairs(MDQ.holdVerdict()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
-    return true
-  elseif sub == "自检" or sub == "selfcheck" or sub == "全诊" then
-    -- ★★★1.75.59l：**一条命令跑完全部只读诊断 + 全文落盘 + 自己 reload**（用户定：
-    --   「命令不要分步骤.玩家是不知道如何执行的.最多配合你打开地图」）⇒ 玩家**只需开图 + 敲这一条命令**：
-    --   本命令跑完 → 全文写进有界环 → **自己调 `ReloadUI`**（本客户端只在 /reload 时写盘）⇒ 存档落地，
-    --   AI 直接读 `SavedVariables\EvalHelp.lua`。★玩家**不需要**再做什么（聊天回显 /reload 后仍在，看得见）。
-    local lines = MDQ.fitBattery()
-    local ringN = MDQ.fitDiagPut(lines)
-    -- 聊天只回显少量关键行（防刷屏）：结论行 + 两个决定性的数
-    local concl, l3, l2 = "", "", ""
-    for _, l in ipairs(lines) do
-      if string.find(l, "结论", 1, true) == 1 then concl = l
-      elseif string.find(l, "[3] 我方活句柄", 1, true) == 1 then l3 = l
-      elseif string.find(l, "[2] 名字族", 1, true) == 1 then l2 = l end
-    end
-    for _, l in ipairs({ "[自检] **只读**跑完（不写地图、不调 holdTick）", l2, l3, concl }) do
-      if tostring(l) ~= "" then fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
-    end
-    fogLog("[mapfit] [自检] 全文 %d 行已存入 EH_REALISTICMAP_CFG.fitDiag（环 %d，现 %d 行）",
-      table.getn(lines), tonumber(MDQ.FIT_DIAG_MAX) or 500, ringN)
-    -- ★★★1.75.59m：**延后重载**（用户真机反馈：「`/ehm mapfit 自检` 执行直接重载了.然后啥事没干」）：
-    --   本客户端 `/reload` 会**清空聊天框** ⇒ 旧写法「跑完立刻 `ReloadUI`」等于把上面那几行回显**当场抹掉**
-    --   （玩家看到的就是「重载了、什么都没发生」）。⇒ 这里只**盖章**，由节拍帧到点执行（见 `wfBeat` 第一段），
-    --   并把「N 秒后自动落盘」明说出来 ⇒ 玩家有时间把结论看完，然后它自己重载。
-    local waitSec = tonumber(MDQ.SELF_RELOAD_SEC) or 6
-    MDQ.selfReloadAt = ((type(GetTime) == "function") and GetTime() or 0) + waitSec
-    pcall(MDQ.beatSync)   -- 有待办 ⇒ 即使开关关着也要把节拍挂上（否则到点没人执行）
-    say(string.format("[mapfit] [自检] 全文 **%d 行已就绪**（存 `EH_REALISTICMAP_CFG.fitDiag`）⇒ **%d 秒后自动 /reload 落盘**"
-      .. "（先把上面几行看完；重载后存档里就是全文，AI 自己读）", table.getn(lines), waitSec))
+    for _, l in ipairs(MDQ.holdVerdict()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "检查 alpha" or sub == "check alpha" then
     -- ★1.75.59j：**alpha 只读探针**（一个字节都不写）
-    for _, l in ipairs(MDQ.alphaProbe()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.alphaProbe()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif string.find(sub, "^检查 alpha 试") or string.find(sub, "^check alpha 试") then
     -- ★1.75.59j：**一次性自证实验**（写 1 条「不是我们的」层 → 逐拍读回 → 必还原）
     local k = (string.find(sub, "贴图", 1, true) ~= nil) and "tex" or "alpha"
-    for _, l in ipairs(MDQ.trialStart(k)) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.trialStart(k)) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "检查 alpha 停" or sub == "check alpha stop" then
     local t = MDQ.trialStop("手动停")
     if t == nil then say("[mapfit] 实验：当前没有在跑的实验") else
-      for _, l in ipairs(t) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+      for _, l in ipairs(t) do say("[mapfit] " .. tostring(l)) end
     end
     return true
   elseif sub == "贴图" then
-    for _, l in ipairs(MDQ.texProbe()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.texProbe()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "贴图版本" or sub == "texpack"
       or string.find(sub, "^贴图版本%s") or string.find(sub, "^texpack%s") then
@@ -6889,7 +6533,7 @@ MDQ.cmd = function(sub)
       .. " ｜ 想体检路径与探针：`/ehm mapfit 贴图`")
     return true
   elseif sub == "perf" or sub == "性能" then
-    for _, l in ipairs(MDQ.perfProbe()) do fogLog("[perf] %s", l) say("[perf] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.perfProbe()) do say("[perf] " .. tostring(l)) end
     return true
   elseif sub == "图层" or sub == "layer" or sub == "图层状态" then
     -- ★★★1.75.64：**图层类型** 的只读状态 + 真机自证（★2026-10-11 起现役两档：区域实景 / 图层彩绘）
@@ -6975,15 +6619,18 @@ MDQ.cmd = function(sub)
     end
     local mine, tot = MDQ.editCount(tostring(f))
     local fmine, ftot = MDQ.editFileCount(tostring(f))
+    -- ★2026-10-11：三档的补偿根/文件基线各报各的（**不许再写成两路三元** —— 加档就会漏一路）
+    local eRoot, eFile = MDQ.EDIT_ROOT_JPG, "MapOverlayOffsetJPG.lua"
+    if MDQ.artMode() then eRoot, eFile = MDQ.EDIT_ROOT_ART, "MapOverlayOffset.lua" end
+    if MDQ.paintMode() then eRoot, eFile = MDQ.EDIT_ROOT_PAINT, "MapOverlayOffsetPaint.lua" end
+    if MDQ.srcMode() then eRoot, eFile = MDQ.EDIT_ROOT_SRC, "MapOverlayOffsetSource.lua" end
     say(string.format("　补偿分家：本档（%s）本图 %d / 全部 %d 条（存档 `%s`）｜ 插件基线 本图 %d / 全部 %d 条（%s）"
-      .. " ｜ ★另一档的数字：`/erm 图层` 只报本档 —— 两档各存各的，切换一个字都不动",
-      MDQ.frameLabel(), mine, tot,
-      (MDQ.paintMode() and MDQ.EDIT_ROOT_PAINT or MDQ.EDIT_ROOT_JPG), fmine, ftot,
-      (MDQ.paintMode() and "MapOverlayOffsetPaint.lua" or "MapOverlayOffsetJPG.lua")))
+      .. " ｜ ★各档的数字：`/erm 图层` 只报本档 —— 每档各存各的，切换一个字都不动",
+      MDQ.frameLabel(), mine, tot, eRoot, fmine, ftot, eFile))
     say("　★渲染优先级：本档写 **OVERLAY** 绘制层（彩图那批在 ARTWORK）⇒ 同组内遮盖其它层；原绘制层进原值账，关开关/切换时还回。")
     return true
-  elseif sub == "图层 彩图" or sub == "layer art" then
-    -- ★2026-10-10：彩图已删除 ⇒ `layerSet` 只出声拒绝；**这里返回 true**（命令认了，别再掉回折算 diag）
+  elseif sub == "图层 彩图" or sub == "layer art" or sub == "图层 区域彩图" then
+    -- ★0.2.11：这一档**回来了**（并正式叫「原始图」）⇒ `图层 彩图` 保留为**别名**（老习惯，别让人以为命令失效）
     MDQ.layerSet(MDQ.LAYER_ART)
     return true
   elseif sub == "图层 实景" or sub == "layer jpg" then
@@ -6994,6 +6641,13 @@ MDQ.cmd = function(sub)
     -- ★★★2026-10-11（用户：「新建个图层类型:图层彩绘,和实景图层并列可切换」）：**第二档的切换入口**
     --   —— 与面板里那一行勾选走**同一个写口** `MDQ.layerSet`（唯一写口，绝不各写一半）。
     MDQ.layerSet(MDQ.LAYER_PAINT)
+    return true
+  elseif sub == "图层 原始图" or sub == "layer src" or sub == "图层 原图" then
+    -- ★★★0.2.11（用户：「切换原始图功能调整到采用 MapOverlayOffset.lua MapOverlayData.lua media\WorldMap
+    --   内的贴图载入模式…现在将这个功能在增加回来」）：**第三档的切换入口** —— 「原始图」= 逐区域逐块贴
+    --   `media\WorldMap\<图>\<区域><块号>`（= 搬迁前那条已验证的路）；0.2.9 的合成整区 JPG 口径已并入本档。
+    --   同样走**唯一写口** `MDQ.layerSet`。
+    MDQ.layerSet(MDQ.LAYER_ART)
     return true
   elseif sub == "swm" then
     say("世界迷雾 = **" .. (MDQ.swm() and "开" or "关") .. "**"
@@ -7007,12 +6661,12 @@ MDQ.cmd = function(sub)
     return MDQ.fogSet(false)
   elseif sub == "编辑" or sub == "edit" or sub == "补偿" then
     -- ★1.75.59o：补偿体检（只读；**带与 `MapOverlayData.lua` 的配对结果**）
-    for _, l in ipairs(MDQ.editLines()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.editLines()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "编辑 配对" or sub == "edit join" then
     -- ★与上面那条**同一份**（配对体检本来就含在 `editLines` 里）——
     --   留这个别名只是为了让用法行里写的 `[on|off|配对|清|清全部]` 与实现**逐字对得上**
-    for _, l in ipairs(MDQ.editLines()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.editLines()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "编辑 on" or sub == "edit on" then
     return MDQ.editSet(true)
@@ -7073,17 +6727,17 @@ MDQ.cmd = function(sub)
     return true
   elseif sub == "微调" or sub == "nudge" or sub == "箭头" then
     -- ★1.75.60n：**一条命令**回答「选中之后点箭头为什么没反应」（只读；行同时进取证环 mapFitTrace）
-    for _, l in ipairs(MDQ.nudgeLines()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.nudgeLines()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "重复" or sub == "dup" then
     -- ★1.75.59q：同序号重复的**只读体检**（用户截图里那份「拖不动的重复图」就是它）
-    for _, l in ipairs(MDQ.dupProbe()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.dupProbe()) do say("[mapfit] " .. tostring(l)) end
     return true
   elseif sub == "图层 自证" or sub == "layer self" then
     -- ★★★2026-10-11：**图层自证**（只读）—— 回答「我们写的那个纹理对象，是不是屏幕上显示的那一个」。
     --   真机报障「切换图层第一次成功、之后失败」时，日志已证明点击进来了 / 写口真切了 / 每拍都写了块，
     --   三件事都对而画面不变 ⇒ 只剩「写到不被渲染的那个句柄上」这一种可能，本命令就是它的唯一判据。
-    for _, l in ipairs(MDQ.layerSelfLines()) do fogLog("[mapfit] %s", l) say("[mapfit] " .. tostring(l)) end
+    for _, l in ipairs(MDQ.layerSelfLines()) do say("[mapfit] " .. tostring(l)) end
     return true
   end
   return false
@@ -7104,7 +6758,7 @@ end
 --   ★★名字一律 `MDQ.cfgPanel*`：`MDQ.panel*` 已被**地图右侧那张迷雾贴图列表**占用
 --     （同名定义两次 = 后者静默顶掉前者，`luacheck` 一个字都不报 —— 本项目在案）。
 --   ★★字体：只用 `SetFontObject`（本客户端 FontString **改字号不可靠**、也不吃缩放 ⇒ 不写 `SetFont`）。
-local ERM_PW, ERM_PH = 430, 348   -- ★2026-10-11：+26（图层那两行并列单选；面板高度是派生量，加行必须一起加）
+local ERM_PW, ERM_PH = 430, 374   -- ★2026-10-11：+26（图层那三行并列单选；面板高度是派生量，加行必须一起加）
 local ermUI = { frame = nil, marks = {}, status = nil, chrome = nil, bdRead = "-", bg = nil, detailBtn = nil }
 
 local function ermSolid(t, r, g, b, a)
@@ -7300,14 +6954,18 @@ function MDQ.cfgPanelBuild()
   ermUI.marks[4] = ermCheck(root, y, function() return MDQ.layerMode() == MDQ.LAYER_PAINT end,
     "TB_SM_LAYER_PAINT", { "TB_SM_LAYER_PAINT_TIP1" },
     function(v) if v == true then pcall(MDQ.layerSet, MDQ.LAYER_PAINT) end end)
+  y = y - 26
+  -- ★★★2026-10-11（用户：「地图图层切换内再添加个类型**原始图**」）：**第三行并列单选勾** ——
+  --   与上面两颗**逐字同款**（勾态每次由 `cfgPanelRefresh` 按真值重画；点已勾着的那颗 = 忽略）。
+  -- ★0.2.11：第三行「原始图」的档 = `LAYER_ART`（逐区域逐块；行名/语言键不变）
+  ermUI.marks[5] = ermCheck(root, y, function() return MDQ.layerMode() == MDQ.LAYER_ART end,
+    "TB_SM_LAYER_SRC", { "TB_SM_LAYER_SRC_TIP1" },
+    function(v) if v == true then pcall(MDQ.layerSet, MDQ.LAYER_ART) end end)
   y = y - 30
   local bw, gap = 98, 8
   ermBtn(root, 16, y, bw, 20, L("ERM_BTN_DIAG_STALE"), function() MDQ.cmd("残留") end, { L("ERM_TIP_DIAG") })
   ermBtn(root, 16 + (bw + gap), y, bw, 20, L("ERM_BTN_DIAG_TEX"), function() MDQ.cmd("贴图") end, { L("ERM_TIP_DIAG") })
   ermBtn(root, 16 + (bw + gap) * 2, y, bw, 20, L("ERM_BTN_DIAG_CHECK"), function() MDQ.cmd("检查") end, { L("ERM_TIP_DIAG") })
-  ermUI.detailBtn = ermBtn(root, 16 + (bw + gap) * 3, y, bw, 20, L("ERM_BTN_DETAIL"), function()
-    MDQ.verboseSet(not (ERM_CFG.mapFitVerbose == true))
-  end, { L("ERM_TIP_DETAIL") })
   y = y - 28
   ermUI.status = ermFont(root)
   pcall(ermUI.status.SetPoint, ermUI.status, "TOPLEFT", root, "TOPLEFT", 16, y)
@@ -7338,11 +6996,6 @@ function MDQ.cfgPanelRefresh()
   if ermUI.frame == nil then return false end
   for _, m in ipairs(ermUI.marks) do
     if m.get() == true then pcall(m.mk.Show, m.mk) else pcall(m.mk.Hide, m.mk) end
-  end
-  if ermUI.detailBtn ~= nil and ermUI.detailBtn.text ~= nil then
-    local on = (ERM_CFG.mapFitVerbose == true)
-    pcall(ermUI.detailBtn.text.SetText, ermUI.detailBtn.text,
-      L("ERM_BTN_DETAIL") .. " " .. (on and L("ERM_ON") or L("ERM_OFF")))
   end
   if ermUI.status ~= nil then
     local file = tostring(select(1, mapInfo()) or "")
@@ -7413,12 +7066,34 @@ local function mapBtnObj(v)
   return (t == "table") or (t == "userdata")
 end
 function MDQ.mapBtnTarget()
-  -- 「点一下会切到哪一档」= 当前档的**另一档**（两档互为对方的去处；`LAYER_ART` 已删除且读口是白名单式 ⇒ 只有两档）
-  if MDQ.layerMode() == MDQ.LAYER_PAINT then return MDQ.LAYER_JPG end
-  return MDQ.LAYER_PAINT
+  -- 「点一下会切到哪一档」= 按**档序**的下一档：实景 → 彩绘 → 原始图 → 实景…（三档循环）
+  --   ★2026-10-11 加第三档时**只改这一个函数**：按钮文案、提示、点击动作全都读它（唯一来源）。
+  local m = MDQ.layerMode()
+  -- ★临时关闭的档不进循环（`MDQ.layerOn`）⇒ 只剩实景时**停在实景**（点它无副作用）
+  if m == MDQ.LAYER_JPG then
+    if MDQ.layerOn(MDQ.LAYER_PAINT) then return MDQ.LAYER_PAINT end
+    if MDQ.layerOn(MDQ.LAYER_ART) then return MDQ.LAYER_ART end
+    return MDQ.LAYER_JPG
+  end
+  if m == MDQ.LAYER_PAINT then
+    if MDQ.layerOn(MDQ.LAYER_ART) then return MDQ.LAYER_ART end
+    return MDQ.LAYER_JPG
+  end
+  return MDQ.LAYER_JPG
+end
+-- ★每一档的**界面名语言键**（唯一来源：面板行名、按钮文案、提示里的档名全用它 ⇒ 加档不漏文案）
+function MDQ.layerNameKey(mode)
+  if mode == MDQ.LAYER_ART then return "TB_SM_LAYER_SRC" end   -- ★0.2.11：第三档 = art，行名照旧「原始图」
+  if mode == MDQ.LAYER_SRC then return "TB_SM_LAYER_SRC" end
+  if mode == MDQ.LAYER_PAINT then return "TB_SM_LAYER_PAINT" end
+  return "TB_SM_LAYER_JPG"
 end
 function MDQ.mapBtnLabel()
-  if MDQ.mapBtnTarget() == MDQ.LAYER_PAINT then return L("ERM_MAPBTN_TO_PAINT") end
+  local t = MDQ.mapBtnTarget()
+  -- ★没有可切的档（其余临时关闭）⇒ 不写「切换到实景」这种骗人的话
+  if t == MDQ.layerMode() then return L("ERM_MAPBTN_OFF") end
+  if t == MDQ.LAYER_PAINT then return L("ERM_MAPBTN_TO_PAINT") end
+  if t == MDQ.LAYER_SRC then return L("ERM_MAPBTN_TO_SRC") end
   return L("ERM_MAPBTN_TO_JPG")
 end
 -- ★★★2026-10-11（用户报障「重复点击只有第一次生效，之后没变化」的关键一条）：
@@ -7429,6 +7104,11 @@ end
 function MDQ.mapBtnMapIn(mode)
   local f = select(1, mapInfo())
   if type(f) ~= "string" or f == "" then return nil end
+  -- ★0.2.11：第三档「原始图」= 逐区域逐块 ⇒ 「本图有没有数据」看 **`MapOverlayData.lua` 里有没有这张图**
+  if (mode == MDQ.LAYER_ART) or (mode == MDQ.LAYER_SRC) then
+    if type(MDQ.artTbl) ~= "function" then return nil end
+    return (MDQ.artTbl(f) ~= nil)
+  end
   if mode == MDQ.LAYER_PAINT then
     if type(MDQ.paintBase) ~= "function" then return nil end
     return (MDQ.paintBase(f) ~= nil)
@@ -7437,10 +7117,9 @@ function MDQ.mapBtnMapIn(mode)
   return (MDQ.jpgBase(f) ~= nil)
 end
 function MDQ.mapBtnTip()
-  local toPaint = (MDQ.mapBtnTarget() == MDQ.LAYER_PAINT)
   local out = {
     string.format(L("ERM_MAPBTN_TIP1"),
-      L(toPaint and "TB_SM_LAYER_PAINT" or "TB_SM_LAYER_JPG"), MDQ.frameLabel()),
+      L(MDQ.layerNameKey(MDQ.mapBtnTarget())), MDQ.frameLabel()),
     L("ERM_MAPBTN_TIP2"),
     L("ERM_MAPBTN_TIP3"),
   }
@@ -7449,7 +7128,7 @@ function MDQ.mapBtnTip()
   if MDQ.mapBtnMapIn(MDQ.layerMode()) == false then
     local f = select(1, mapInfo())
     out[#out + 1] = string.format(L("ERM_MAPBTN_NOMAP"), tostring(f),
-      L((MDQ.layerMode() == MDQ.LAYER_PAINT) and "TB_SM_LAYER_PAINT" or "TB_SM_LAYER_JPG"))
+      L(MDQ.layerNameKey(MDQ.layerMode())))
   end
   return out
 end
@@ -7515,39 +7194,18 @@ function MDQ.mapBtnEnsure()
   MDQ.mapBtn = b
   pcall(b.SetScript, b, "OnClick", function()
     if type(wfEcho) == "function" then pcall(wfEcho) end   -- ★用户点界面 = 他主动问的 ⇒ 回显必须可见
-    -- ★★★「点了没反应」必须留一行可判读的回显（本项目 1.75.60r 定的尺子）：
-    --   这一行把三件事当场分开 —— ① 点击到底有没有进来；② 写口有没有真的切（`layerSet` 返回值）；
-    --   ③ 上一拍渲染的账（块数 + `why`：表里没这张图 / 贴图加载不出来 / 建不出层 …）。
-    local before, target = MDQ.layerMode(), MDQ.mapBtnTarget()
-    local okS, ok2 = pcall(MDQ.layerSet, target)
-    local lrTxt = "还没渲过"
-    if type(MDQ.lastRender) == "table" then
-      local lr = MDQ.lastRender
-      lrTxt = string.format("%s ｜ %d 块%s", tostring(lr.map or "?"), tonumber(lr.n) or 0,
-        (lr.why ~= nil) and (" ｜ " .. tostring(lr.why)) or "")
-    end
-    -- ★★★2026-10-11：把「贴图到底换成功没有」的账一起摊出来（`MDQ.texSwapBad` = 写后自证抓到几次没换成功）
-    if (tonumber(MDQ.texSwapBad) or 0) > 0 then
-      lrTxt = lrTxt .. string.format(" ｜ ★贴图没换成功 %d 次（已换新对象重写 %d 次）",
-        tonumber(MDQ.texSwapBad) or 0, tonumber(MDQ.texSwapFixed) or 0)
-    end
-    say(string.format("顶栏按钮：点击 ⇒ 目标=%s ｜ 切换前=%s ｜ %s ｜ 现在=%s ｜ build=%s",
-      tostring(target), tostring(before),
-      (not okS) and ("**出错**（" .. tostring(ok2) .. "）") or (ok2 and "已切换" or "**没切换**（写口拒绝）"),
-      tostring(MDQ.layerMode()), tostring(MDQ.BUILD)))
-    -- ★★★2026-10-11：第二行 = **这一拍到底写没写、写的是哪个对象、那个对象在不在屏幕上**（本项目 1.75.60r 那条尺子）。
-    --   为什么必须摊开：「渲染 1 块」只表示「这一拍有 1 块」（`n=1` 与「真写了」是两件事）；
-    --   而「写进去了」与「写的那张就是屏幕上那张」又是两件事。三件事各自都能让画面一动不动。
-    say(string.format("　上一拍渲染：%s ｜ 写 %s / 跳 %s ｜ 写的对象=%s ｜ 来源=%s ｜ 自证：%s",
-      lrTxt, tostring(tonumber(MDQ.wroteN) or 0), tostring(tonumber(MDQ.skipN) or 0),
-      tostring((MDQ.slot ~= nil and MDQ.slot[1] ~= nil) and MDQ.slot[1].tex or MDQ.lastTex or "nil"),
-      tostring(MDQ.lastHow or "?"), tostring(MDQ.selfProbe())))
-    -- ★★★2026-10-11（真机报障「重复点击只有第一次生效」）：**本图两档都不接管**时如实说明 ——
-    --   大陆图 / 主城 / UnrealMap 没有的那 11 张自定义图，切图层**画面本来就一个像素都不会变**；
-    --   不说这一句，用户看到的现象与「按钮坏了」长得一模一样（最容易被误判成 bug）。
+    -- ★★★0.2.9（用户：「子插件 以上日志清理下」+ 截图圈住那两行长诊断）：**点击不再打诊断行**。
+    --   旧版这里打两行 —— `顶栏按钮：点击 ⇒ 目标=… ｜ 切换前=… ｜ 已切换 ｜ 现在=… ｜ build=…`
+    --   与 `　上一拍渲染：… ｜ 写 X / 跳 Y ｜ 写的对象=userdata… ｜ 来源=… ｜ 自证：… ｜ 显示中非我们: <6 个瓦片名>`；
+    --   真机上每行折成 3~4 行聊天，而且**每次点击都跑一遍 `MDQ.selfProbe()`**（写哨兵 alpha + 枚举 region）。
+    --   ⇒ 现在点击**只留 `layerSet` 那一行短回显**；要看这些账就敲 `/erm 图层 自证`（只读、你问它答）。
+    local target = MDQ.mapBtnTarget()
+    pcall(MDQ.layerSet, target)
+    -- ★「本图这一档不接管」仍然如实说一句（否则「切了没反应」与「按钮坏了」无从分辨）；
+    --   覆盖不到的图（大陆 / 主城 / 11 张自定义图）本来就一个像素都不会变 —— 这是有意为之，不是 bug。
     if MDQ.mapBtnMapIn(target) == false then
       say(string.format("　" .. L("ERM_MAPBTN_NOMAP"), tostring(select(1, mapInfo()) or "?"),
-        L((target == MDQ.LAYER_PAINT) and "TB_SM_LAYER_PAINT" or "TB_SM_LAYER_JPG")))
+        L(MDQ.layerNameKey(target))))
     end
     pcall(MDQ.mapBtnSync)
   end)
@@ -7596,11 +7254,6 @@ end
 function MDQ.cfgPanelChromeLine()
   return string.format(L("ERM_BD_STATE"), tostring(ermUI.chrome or "未建"), tostring(ermUI.bdRead or "-"))
 end
-function MDQ.verboseSet(on)
-  ERM_CFG.mapFitVerbose = on and true or nil
-  say(string.format(L("ERM_VERBOSE_SAY"), (on and L("ERM_ON") or L("ERM_OFF"))))
-  return true
-end
 -- 状态体检（只读）：`/erm`、`/erm 状态` 与第 ⑦ 页 [打开] 都走它
 function MDQ.cfgStatusLines()
   local out = {}
@@ -7635,8 +7288,6 @@ if type(SlashCmdList) == "table" then
       for _, l in ipairs(MDQ.cfgStatusLines()) do say(l) end
       return
     end
-    if sub == "详细 on" or sub == "verbose on" then return MDQ.verboseSet(true) end
-    if sub == "详细 off" or sub == "verbose off" then return MDQ.verboseSet(false) end
     if MDQ.cmd(sub) then return end
     -- ★未知子命令**如实报**（不许静默什么都不做）+ 摊开用法
     say(string.format(L("ERM_UNKNOWN_SUB"), sub))
@@ -7667,10 +7318,10 @@ do
       local nImp, nEdit, didImp = importHostCfg()
       if didImp then
         if nImp > 0 then
-          fogSay("已从宿主存档（EvalHelp）导入 %d 项设置 + 编辑补偿 %d 条 —— 你以前调好的偏移量继续有效；"
+          say("已从宿主存档（EvalHelp）导入 %d 项设置 + 编辑补偿 %d 条 —— 你以前调好的偏移量继续有效；"
             .. "宿主里那份老键**原样保留**（那是别人的存档，本插件只读不写）", nImp, nEdit)
         else
-          fogSay("宿主存档里没有需要导入的设置（本插件用自己的存档 `EH_REALISTICMAP_CFG`）")
+          say("宿主存档里没有需要导入的设置（本插件用自己的存档 `EH_REALISTICMAP_CFG`）")
         end
       end
       -- ② 上一轮「全图核验」探针的存档键一次性清掉（那些命令已整条删除）
@@ -7684,9 +7335,17 @@ do
           say("已清理上一轮全图核验探针的存档（" .. table.concat(nk, " / ") .. "）")
         end
       end
-      -- ③ 只在本会话有效的诊断档（策略/详细日志）回默认 —— 忘了关就会一直刷屏
+      -- ③ 只在本会话有效的诊断档（策略）回默认 —— 忘了关就会一直刷屏
       if ERM_CFG.mapFitMode ~= nil then ERM_CFG.mapFitMode = nil end
       if ERM_CFG.mapFitVerbose ~= nil then ERM_CFG.mapFitVerbose = nil end
+      -- ③b ★0.2.8：**日志整族已删除** ⇒ 把存档里那批「有键无代码」的诊断环一次性清掉
+      --     （用户：「将日志清理下」+ 选定「连取证环一起删」；标记键只做一次，之后不再扫）
+      if not ERM_CFG.logCleared28 then
+        ERM_CFG.logCleared28 = true
+        for _, k in ipairs({ "trace", "staleLog", "editLog", "perfProbe", "fitDiag" }) do
+          if ERM_CFG[k] ~= nil then ERM_CFG[k] = nil end
+        end
+      end
       -- ④ 清本地地图签名缓存 + 旧调试日志（一次性；用户 1.75.51 定的口径）
       if not ERM_CFG.cacheCleared51 then
         ERM_CFG.cacheCleared51 = true
@@ -7694,7 +7353,6 @@ do
         for _, k in ipairs({ "mapFitOrig", "mapFitVer", "mapFitTrace", "mapFitCapLog" }) do
           if ERM_CFG[k] ~= nil then ERM_CFG[k] = nil nc = nc + 1 end
         end
-        if nc > 0 then pcall(fogLog, "清缓存：存档老键 %d 个（一次性）", nc) end
       end
       -- ⑤ ★★★默认档 = **开 + 区域实景**（用户 1.75.65：「默认设置 开启世界迷雾->选中实景地图,关闭彩图」）。
       --   · `swmOverlay` / `staleClean`（1.75.52 起同一个控制）：键为 nil（从没写过）⇒ **落成显式 true**
@@ -7711,8 +7369,11 @@ do
       end
       if ERM_CFG.staleClean == nil then ERM_CFG.staleClean = (ERM_CFG.swmOverlay == true) end
       local lmFresh = (ERM_CFG.layerMode == nil)
-      local lmArtGone = (ERM_CFG.layerMode == MDQ.LAYER_ART)
-      if lmFresh or lmArtGone then ERM_CFG.layerMode = MDQ.LAYER_JPG end
+      if lmFresh then ERM_CFG.layerMode = MDQ.LAYER_JPG end
+      -- ★★★0.2.11：「原始图」这一档**回来了**（改成逐区域逐块）⇒ 0.2.9 那个 id（`"src"` = 合成整区 JPG）
+      --   **并入 `"art"`**：老存档就地迁移 + **如实出声一次**（行为改变必须出声；之后键已是 art ⇒ 不再播报）。
+      local lmSrcMerged = (ERM_CFG.layerMode == MDQ.LAYER_SRC)
+      if lmSrcMerged then ERM_CFG.layerMode = MDQ.LAYER_ART end
       -- ★编辑模式也落成显式布尔（默认关；补偿表本身是**用户数据**，一律不碰）
       if ERM_CFG.editMode == nil then ERM_CFG.editMode = false end
       -- ★1.75.60z：**分版本贴图的死键一次性清掉**（该机制已整条清理；留着只会让以后的排查
@@ -7722,7 +7383,6 @@ do
       if type(ERM_CFG.editJpg) ~= "table" and ERM_CFG.editJpg ~= nil then ERM_CFG.editJpg = nil end
       -- ★2026-10-11：**彩绘那一档的补偿根**（与 editJpg 同一条规范化；键形态一字未改：仍是 `区域#块号`）
       if type(ERM_CFG.editPaint) ~= "table" and ERM_CFG.editPaint ~= nil then ERM_CFG.editPaint = nil end
-      if type(ERM_CFG.editLog) ~= "table" and ERM_CFG.editLog ~= nil then ERM_CFG.editLog = nil end
       if wfFresh and type(say) == "function" then
         --   ★播报必须与**实际落成的值**一致（老存档里单独关过清理的那一支是关 ⇒ 不许照念「默认开」那套词）
         if MDQ.swm() then
@@ -7733,15 +7393,20 @@ do
         end
       end
       if lmFresh and type(say) == "function" then
-        say("区域实景地图·图层类型 = **区域实景**（本版起的默认档；`/erm` 面板里可切到**图层彩绘**）")
+        say("区域实景地图·图层类型 = **区域实景**（本版起的默认档；`/erm` 面板里可切到**图层彩绘**或**原始图**）")
       end
-      if lmArtGone and type(say) == "function" then
-        say("区域实景地图·图层类型：**「区域彩图」这一层已删除**（现役两档 = 区域实景 / 图层彩绘）"
-          .. "⇒ 你的存档原先是彩图，已自动切到实景（补偿数据一个字没动）")
+      if lmSrcMerged and type(say) == "function" then
+        say("区域实景地图·图层类型：**「原始图」这一档改成了「逐区域逐块」**（`MapOverlayData.lua` 定位 + 补偿 + "
+          .. "`media\\WorldMap` 贴图，即搬迁前那条路）⇒ 你原先选的合成整区图口径已并入本档（补偿数据一个字没动）")
       end
-      -- ★★★2026-10-11：**选了彩绘但数据表没载入** ⇒ 如实出声一次（否则就是「勾着彩绘却什么都没发生」的静默态）
+      -- ★★★2026-10-11：**选了某一档但它的数据表没载入** ⇒ 如实出声一次（否则就是「勾着它却什么都没发生」的静默态）
+      --   ★加第三档时这里也要加一路（三档各有一句）—— 漏了就是「选了原始图、什么都不说、也不画」。
       if (ERM_CFG.layerMode == MDQ.LAYER_PAINT) and (MDQ.paintTbl() == nil) and type(say) == "function" then
         say("区域实景地图·图层类型：你选的是**图层彩绘**，但数据表 `MapOverlayPaintData.lua` **没载入** ⇒ "
+          .. "这一档本图不会接管（客户端自己的地图保持原样）。请检查子插件是否完整安装，或 `/erm 图层 实景` 切回实景")
+      end
+      if (ERM_CFG.layerMode == MDQ.LAYER_ART) and (rawget(_G, "EVAL_MAP_OVERLAY_DATA") == nil) and type(say) == "function" then
+        say("区域实景地图·图层类型：你选的是**原始图**，但数据表 `MapOverlayData.lua` **没载入** ⇒ "
           .. "这一档本图不会接管（客户端自己的地图保持原样）。请检查子插件是否完整安装，或 `/erm 图层 实景` 切回实景")
       end
       -- ⑤b ★改动记号落盘（每次 `/reload` 都刷一次）—— 存档里有了它，

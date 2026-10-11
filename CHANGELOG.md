@@ -3,6 +3,195 @@
 > 版本口径：本插件**独立编号**（`0.x.y`），与宿主版本**解耦**（宿主 `1.76.x` ↔ 本插件 `0.1.0` 这种对应关系只表示
 > 「哪一轮发布带上它」）。**本插件版本 = `.toc` 的 `## Version` == 源码里的 `MDQ.BUILD`**（两处现读对账）。
 
+## 0.2.17 —— 2026-10-11（清理「图层切换」的聊天日志）
+
+用户：「**子插件 实景地图 清理下切换日志**」（截图里点一次按钮刷三行：档名 /「已经是…没有变化」/「本图不在数据表里…」）。
+
+- `MDQ.layerSet` 里那两行**档名播报**（「= xxx」与「已经是 xxx（没有变化）」）**不再上屏**；
+  「本图不在数据表里」那类提示也不再从**切换路径**刷出来。要看状态与「本图接不接管」⇒ 只读命令 **`/erm 图层`**、**`/erm 检查`**。
+- ★**保留**：`ERM_LAYER_OFF`（点被临时关闭的档时的**如实拒绝语**——那是「行为被拒绝」，不是噪声）、`renderErrSay`（真实渲染故障一行）、命令回显。
+
+## 0.2.16 —— 2026-10-11（关闭「原始图」档 + 未使用图层的素材/数据表不进包）
+
+用户：「**先关闭原始图功能.不调试了. 然后子插件打包的时候记得不要将没使用的图层数据打包进去**」。
+
+- **档位**：`MDQ.LAYER_OFF` 现在 = `{ paint, art }` ⇒ **只留「区域实景」**（读口按实景兜底 / 写口如实拒绝 /
+  顶栏按钮只剩实景 / 面板那两行自动收起）。**恢复 = 去掉 `[MDQ.LAYER_ART] = true` 一个字**（素材与表都还在磁盘上）。
+- **打包**：`tmp/pack_subaddons.ps1` 的不发货清单加到 `_v` / `Textures` / `WorldMapJpg\_city` / `WorldMapSource` /
+  **`WorldMap`（原始图，1020 .blp / 44.8 MB）** / **`WorldMapPaint`（彩绘，15 MB）** ⇒ 子包只装**在用的**「区域实景」素材。
+- **`.toc` 撤下四条**（不载入 ⇒ 也不占全局名）：`MapOverlayData.lua` · `MapOverlayOffset.lua` · `MapOverlayPaintData.lua` ·
+  `MapOverlayOffsetPaint.lua`；保留 `MapOverlayJPGData.lua` + `MapOverlayOffsetJPG.lua`（实景那一档在用）。
+- ★**文件一个字节都没删**（都在 `addons\EH_RealisticMap\` 磁盘上）⇒ 恢复 = toc 加回四行 + 打包清单去掉两个目录 + 去掉 LAYER_ART。
+- ★**未调试完的部分如实记**：A（0.2.13）· F（0.2.14）· G（0.2.15）三个修复**都保留在代码里**（都已进包），
+  但**从未在真机验证过**（存档 `buildTag` 一直停在 `0.2.12` ⇒ 客户端始终没 `/reload` 到新版本）；
+  「越切越卡 / 崩溃」的排查**到此暂停**（用户定「不调试了」），**未结案**。
+
+## 0.2.15 —— 2026-10-11（G 修：不再复用客户端对象 + 写前复核句柄 —— 针对「堆损坏」那条崩溃）
+
+真机新崩溃（本地 18:04，开局 1.4h，A+F 已在跑，art 档 Elwynn）：`FMallocBinned3 Attempt to free an unrecognized small block 00007FE9ABC62900`
+= **释放了一个分配器不认识的块**（堆被写坏 / 重复释放 / 释放已失效对象）；被释放地址与我们 userdata 的对象同一堆段。
+
+- ① **`MDQ.texAt` 不再复用客户端对象**（删掉 `return t, "existing"`）：旧写法把客户端自己的纹理交给我们写，而客户端会自己
+  重建/销毁那批对象 ⇒ 我们随后拿旧句柄写 = **use-after-free**；现在一律写**我们自己的匿名对象**，客户端那批交给守护去 Hide。
+- ② **写前复核句柄**（`MDQ.render`）：写之前读一次宽高，读不到 ⇒ 丢掉记账、重取一次（把陈旧句柄变成一次性自愈）。
+- ③ **`dupKill` 的哨兵 alpha 优先写我们自己的对象**（旧写法优先拿客户端那个 ⇒ 往别人对象上写哨兵）。
+
+- ★**如实边界**：B（每拍枚举/藏账累积）· C 的其余部分 · D（爆发窗整批重写）仍未动；本条是**安全性**修复，不是性能优化。
+
+## 0.2.14 —— 2026-10-11（修 F：**不再用客户端池名建对象** + **绝不抹客户端的全局绑定**）
+
+用户：「**F. 具名对象与客户端自己的池位名字撞车 + 我们自己把客户端的全局绑定抹掉 这个也试下**」。两处改动：
+
+- ① **建对象改「匿名优先」**（`MDQ.texAt`）：旧写法 `CreateTexture(fr, "WorldMapOverlay<n>", "ARTWORK")` 用的是
+  **客户端自己也用的池位名** ⇒ 名字撞车（谁后建谁顶掉全局名，客户端按名字取到的可能是我们的对象，或反过来）。
+  **「原始图」档要建到几十号**（Barrens 84 块）⇒ 撞面比整区档（只用 1 号）大得多，与「只在切原始图 + 多图来回切后卡死」吻合。
+  现在一律匿名建，我们只靠 `MDQ.own[n]` / `ownSet[t]` **按序号 + 对象身份**记账，**不占任何全局名**；
+  ★匿名建不出来才退回具名（fail-open，宁可占名也绝不静默画不出来，并记进 `MDQ.made`）。
+- ② **撤掉「抹客户端全局绑定」那句**（`MDQ.dropOwnForSwitch` 里的 `rawset(_G, nm, nil)`）：它抹掉的正是
+  **客户端自己也用的池位名** ⇒ 客户端随后按名字取不到对象。现在那里**只 `Hide` 我们自己的对象，一个全局名都不动**。
+  ★A 修（0.2.13）已让该函数默认不被调用；这条是给「把 `SWAP_OBJ_ON_SWITCH` 改回 `true`」那条路留的**保险**。
+- ★**如实边界**：本轮只做 A + F。**B**（每拍枚举/原生藏账随访问过的图累积）· **C**（`dupKill` 随块数放大）·
+  **D**（爆发窗整批重写）**都还没动**；另：复用客户端池位那条 `existing` 分支**保持不变**（我们只是往它身上写几何，不夺名）。
+
+## 0.2.13 —— 2026-10-11（修 A：切图层**不再丢句柄 / 不再重建对象** —— 「越切越卡」第一刀）
+
+用户：「**先修A 试下**」。A = `layerSet` 里每次都调 `MDQ.dropOwnForSwitch`：
+
+- **旧行为**：把那 N 个句柄（`MDQ.own[k]`）+ 身份账（`ownSet[t]`）+ 全局名（`_G["WorldMapOverlay<k>"]`）**一起摘掉**（只 `Hide`）
+  ⇒ 下一拍 `MDQ.texAt` 只能 `CreateTexture` **N 个全新对象**（N = 本图块数；「原始图」档下几十个，如 Barrens 84 块），
+  而 1.12 **没有销毁纹理的 API** ⇒ 旧对象永远留在 `WorldMapDetailFrame` 下、**仍在 `GetRegions()` 枚举里** ⇒ 越切越卡。
+- **本版**：新增常量 **`MDQ.SWAP_OBJ_ON_SWITCH = false`**，那句调用被它挡住（**改成 `true` = 一个字放回来**）；
+  `MDQ.dropOwnForSwitch` 函数本体**保留不删**。
+- **依据**：0.2.7 真机已实测「**改名（`_re`/`_cn`/`_src`）才是真解**」⇒ 0.2.6 那条「同一对象二次 `SetTexture` 不刷新」**已被推翻**
+  ⇒ 换对象这一步本来就是死重（1 块的整区档下每次只多 1 个对象，所以一直没露头）。
+- ★**如实边界**：本版**只做了 A** —— B（每拍枚举/原生藏账随访问过的图累积）、C（`dupKill` 随块数放大）、
+  D（爆发窗整批重写）、F（**具名** `WorldMapOverlay<序号>` 与客户端池名撞车 + `rawset(_G,…)=nil` 抹掉客户端绑定）**都没动**。
+  ★若切档后画面**不刷新**（同对象二次 SetTexture 的旧疑点），说明 A 不能单独下 ⇒ 立刻回退或改走「只换对象不换名」。
+
+## 0.2.12 —— 2026-10-11（「WorldMapSource」那套**不接**：原始图只走数据集贴图这一条路）
+
+用户原话：「**WorldMapSource 这个先不要对接(这个数据不准)**. 原始图面就是你上面刚完成恢复的数据集贴图」。
+
+- **「原始图」= 数据集贴图那一条路**（0.2.11 恢复的：`MapOverlayData.lua` 定位 + `MapOverlayOffset.lua`/存档补偿 +
+  `media\WorldMap\<图>\<区域><块号>`，自带优先 → 客户端 `Interface\WorldMap`）—— 这一档**保持开启**。
+- **WorldMapSource 从对接面撤掉**（三件事，都可一条命令放回）：
+  ① `.toc` 撤下 `MapOverlaySourceData.lua` / `MapOverlayOffsetSource.lua`（**文件留在磁盘**，只是不载入 ⇒ 不再占全局名）；
+  ② `tmp\pack_subaddons.ps1` 把 `media\WorldMapSource` 列进**不发货清单**（22.6 MB 不接的数据不进包；本机素材一个字节没删）；
+  ③ 三语 `TB_SM_LAYER_SRC_TIP1` 改口 —— 原文案还在说「合成整区图（media\WorldMapSource）」，与现行实现不符（会误导玩家）。
+  ★**顺带修掉一处语言包缺陷**：ruRU 里 `TB_SM_LAYER_SRC_TIP1` **写了两遍**（0.2.9 那轮留下的重复键，后者静默顶掉前者）⇒ 已收敛成一行。
+- ★**旧存档兼容不变**：`"src"`（0.2.9 的合成整区 JPG id）仍由读口/写口就地归一成 `"art"` —— 这不是「对接 WorldMapSource」，只是 id 迁移。
+- ★**放回办法**（若哪天要接）：`.toc` 加回那两行 + 打包清单去掉 `WorldMapSource` + `layerMode` 认回 `LAYER_SRC`（素材与生成器都在）。
+
+## 0.2.11 —— 2026-10-11（★「原始图」改回**逐区域逐块**：`MapOverlayData.lua` + `MapOverlayOffset.lua` + `media\WorldMap`，功能整体放回）
+
+用户原话：「子插件:切换原始图功能调整到采用 MapOverlayOffset.lua MapOverlayData.lua media\WorldMap 内的贴图载入模式.
+这个模式在子插件搬迁之前功能是已经完成的.现在将这个功能在增加回来.」
+
+- ★★★**第三档的 id = `MDQ.LAYER_ART`（`"art"`），显示名照旧「原始图」** —— 走的就是**搬迁前那条已验证的路**：
+  `MapOverlayData.lua` 定位置（53 图 / 707 区，`MDQ.areaOf`/`expectRect` 按 256 网格拆块）+ `MapOverlayOffset.lua`（文件基线）
+  / 存档补偿（`EDIT_ROOT_ART` = `edit`）+ 贴图 `media\WorldMap\<图>\<区域><块号>`（**自带优先 → 客户端 `Interface\WorldMap`**）。
+  ⇒ `MDQ.frameMode()` 对它为 false ⇒ 渲染走 **`MDQ.render`**（逐区域逐块），不再是 `jpgRender` 整区一张。
+- **0.2.9 那个合成整区 JPG 的 id（`"src"`）并入本档**：`layerMode()` 与 `layerSet()` **两个口都就地归一**，
+  VLA 里另做一次性迁移（老存档 `"src"` ⇒ `"art"`）**并如实出声一次**（行为改变必须出声）。
+- **四处接线（缺一条这一档就是死的）**：① 读口 `MDQ.layerMode()` 白名单收 `art`（新增唯一判据口 **`MDQ.artMode()`**）；
+  ② 写口 `MDQ.layerSet()` 不再拒绝（旧注释里那句「区域彩图已删除」已成历史）；③ `MDQ.editTbl()` → `EDIT_ROOT_ART`；
+  ④ `MDQ.editFileTbl()` → `EVAL_MAP_OVERLAY_OFFSET`（**两个口必须一起改**，否则「存档读 A、文件读 B」= 补偿串味）。
+  另有五处文案/入口同源更新：`frameLabel`/`frameTblName`/`frameSrcName` · `/erm` 面板第三行 · 顶栏按钮三档循环 ·
+  `layerNameKey` · `/erm 图层 原始图`（★`图层 彩图` / `layer art` 保留为**别名**，老习惯不该失效）· 只读体检的补偿分家行。
+- ★**素材与基表已复刻进本插件目录**（发布版才自包含）：`media\WorldMap\`（**1020 个 .blp / 44.8 MB** / 53 图）+
+  `MapOverlayData.lua`（28.4 KB）+ `MapOverlayOffset.lua`（47.6 KB，**已进 `.toc`**，排在消费方之前）。
+  ★仓库根那两份/那份库**原样留着**（本地 A/B 与生成器仍在用；宿主 `.toc` 不列它们 ⇒ **不会被重复载入**，无全局重名）。
+- ★**打包**：`tmp\pack_subaddons.ps1` 的 media 排除表只有 `_v`/`Textures`/`WorldMapJpg\_city` ⇒ `media\WorldMap` 会自动进子包。
+- ★**保留但当前不可达**：`media\WorldMapSource\`（53 张 / 22.6 MB）与 `MapOverlaySourceData.lua` / `MapOverlayOffsetSource.lua`
+  （0.2.9 的合成整区口径）**一个字节都没删** —— 那套的生成器与闸门也都还在（`tmp\gen_worldmapsource*.js` / `verify_worldsourcedata.js`）。
+- ★**补偿导出器**：`gen_mapoffset.js`（不带 `--jpg` 的那套 = 本档）的产物与基线路径**改到 `addons/EH_RealisticMap/`**
+  —— 不改就是「烘到一份运行期根本不载入的文件里」= 静默失效。
+
+## 0.2.10 —— 2026-10-11（图层切换**只保留「区域实景」**：彩绘 / 原始图两档**临时关闭**，功能与素材一个字节没删）
+
+用户原话：「图层切换功能**只保留实景**，其他两个功能**临时关闭**。**保留功能**」。
+
+- **做法 = 一张开关表**（`EH_RealisticMap.lua` 的 **`MDQ.LAYER_OFF = { [LAYER_PAINT] = true, [LAYER_SRC] = true }`**）：
+  **代码 / 三张基表 / 三档补偿 / 五个分派口 / 编辑模式分派 / 素材目录（`media\WorldMapPaint` · `media\WorldMapSource`）
+  一个字节都没删**，**删掉那一行（或改 `false`）即全部放回来**。配套四处：
+  ① **读口兜底**：`MDQ.layerOn(mode)` 是唯一判据，`MDQ.layerMode()` 对「被关的档」**按实景走**
+     （存档里存着 `paint`/`src` 的老用户不会卡在半状态；面板那两行的勾态由真值重画 ⇒ **自动收起**）；
+  ② **写口如实拒绝**：`MDQ.layerSet` 排在白名单之后、比档之前 —— 打印「「X」这一档已临时关闭（功能与素材都保留）」，
+     **绝不静默降级**（静默降级正是本项目最怕的那类失效）；
+  ③ **顶栏按钮**：`MDQ.mapBtnTarget` 只把**开着的档**排进循环；只剩实景时 `MDQ.mapBtnLabel` 返回
+     **`ERM_MAPBTN_OFF`「其余图层临时关闭」**（不再写「切换到实景」这种骗人的话），点它 = 无副作用；
+  ④ **三语新增两键** `ERM_LAYER_OFF`（拒绝语，带档名）/ `ERM_MAPBTN_OFF`（按钮文案）。
+- ★**命令口行为**：`/erm 图层 彩绘|原始图` ⇒ 如实回上面那句拒绝语；`/erm 图层 实景` 照旧（本来就是当前档，回「没有变化」）；
+  `/erm 图层`（只读状态）不变。★**恢复办法**（一条）：把 `MDQ.LAYER_OFF` 那一行删掉或改成 `{}` ⇒ 读口/写口/顶栏循环/面板三行**同时**回来。
+
+## 0.2.8 —— 2026-10-11（子插件日志整族删除：不再自动刷屏、不再落盘取证环）
+
+用户原话：「子插件: 实景地图 将日志清理下」+ 选定「连取证环一起删」。
+
+- **删掉**：`fogLog` / `fogSay` / `fogSayV` / `chatGateOn` / `verboseOn` / `ERM_TRACE_MAX`、**全部自动上屏的播报**（12 处）、
+  以及五个有界落盘环（`trace` / `staleLog` / `editLog` / `perfProbe` / `fitDiag`）与只服务它们的口
+  （`staleLogPut/Get` · `editLogPut/N` · `fitDiagPut` · `MDQ.fitBattery` · `objLine` · `/erm 自检` · `/erm 详细 on|off` · 面板 `[详细]` 按钮）。
+- **保留**：命令 / 按钮回显（`say` + `ECHO_AT` 窗口）· **`renderErrSay` 一行**（走不门控的 `EVAL_SAY_FORCE` ——
+  真实故障必须出声，被「调试日志」挡下就成「地图卡住且不吭声」）· 全部**只读探针命令**（残留/检查/贴图/图层/重复/alpha/编辑/状态/perf）。
+- 存档死键一次性清理 = 载入期 `ERM_CFG.logCleared28` 块。
+
+## 0.2.9 —— 2026-10-11（★第三档「原始图」：把客户端自己的地图美术合成成一张完整整图，并进图层切换）
+
+用户原话：「地图图层切换内再添加个类型**原始图**」（上一句：「在子插件内纹理目录内创建一个目录 WorldMapSource：
+根据乌龟服的地图数据搭配我之前整理的 MapOverlayOffset.lua 纹理位置校准偏移量，合成一张正确的纹理地图，按照区域存储」）。
+
+### 这一档是什么
+
+`media\WorldMapSource\<图>_src.jpg` = **客户端自己的地图美术合成出来的整图**（不是外部素材）：
+
+1. 基础底图 = `Interface\WorldMap\<图>\<图>1..12`（4×3×256 行优先，从帧左上 1:1 铺、右下被 1002×668 帧裁掉）；
+2. 区域块 = `media\WorldMap\<图>\<区域><块号>.blp`（**按补丁优先级**抽的那一份），位置 = `MapOverlayData.lua` 表值
+   + `MapOverlayOffset.lua` 补偿（与运行期 `editFinal` / `editSize` **同一套算式** ⇒ 与游戏逐像素对位）。
+
+⇒ 画面 = **游戏里「全探索」时的那张完整地图**（有底图 ⇒ 不像单靠区域块那样只有 ~50% 覆盖），**53 张图全覆盖**。
+
+### 素材怎么来的（新工具，全在 `tmp\`）
+
+- `tmp/wmsrc_base_tiles.js`：从乌龟服归档**按补丁优先级**抽（`interface → patch → patch-2 … patch-9 → patch-Z`，
+  后者覆盖前者 = 客户端实际加载顺序）。`--kind base` = 底图（**53 张全部 12/12 齐**：patch-9 474 + patch-Z 162）；
+  `--kind area` = 区域块（**1019 块全齐**：patch-Z 656 + patch-9 363）。自证 = `--plan` + `_manifest.json`。
+  ★**为什么必须按优先级**：patch-Z 覆盖了 656 块区域块，逐字节比对**全不同**（解码后像素确有差异）——
+  用 interface 那版画出来就不是客户端实际显示的那一张。
+- `tmp/gen_worldmapsource.js`：合成（`--maps` / `--trace` 逐块对照 / `--audit` 配对基准审计 / `--nocomp` A/B /
+  `--base-only` 诊断 / `--size` / `--q`）。
+- `tmp/gen_worldmapsourcedata.js` + `tmp/verify_worldsourcedata.js`：基表生成 + 闸门（**53 键 ↔ 53 文件**）。
+- ★★★**顺手修掉一个真 bug**：`tmp/blp2png.js` 把 BLP2 的 `alphaDepth=1` 当成 **DXT3** ⇒ 按 16B/块读会越界
+  （报 `Received 32776`），**12 块底图整块解不出来**（症状 = 底图只贴上 6/12，另 6 块**静默**算作「缺块」）。
+  正解（判据 = `mip0 长度 ÷ 块数` 反推真实块大小，脚本 `tmp/blp_alphadepth_survey.js`，1043 个 BLP 全扫）：
+  **`0/1 ⇒ DXT1`（8B/块，1 = 带 1-bit alpha）· `4 ⇒ DXT3` · `8 ⇒ DXT5`**。
+- ★**补偿对账**（`--audit`，回答用户「偏移量对齐进去了吗」）：补偿记录自带的配对基准 `bx/by/bw/bh` 与现表
+  **逐条相符 632/632、0 不符** ⇒ 「偏移量的基准 = `MapOverlayData.lua`」这件事有了机器判据。
+
+### 接线（第三档 = 照前两档镜像，别处一行没改）
+
+- Lua：`MDQ.LAYER_SRC = "src"` · `MDQ.SRC_AREA/SRC_TILE` · `MDQ.srcMode()` · `srcTbl/srcBase`
+  （`EVAL_MAP_OVERLAY_SOURCE_DATA`）· `srcPfx/srcPath/SRC_SUF`（无扩展名 + `_src`）· `srcSrcOf`（准入带负对照）·
+  **四个分派口各加一路**（`frameBase` / `framePath` / `frameSrcOf` / `framePathMark` / `frameSrcName` /
+  `frameTblName` / `frameLabel`）· `EDIT_ROOT_SRC = "editSrc"` + `editFileTbl → EVAL_MAP_OVERLAY_OFFSET_SOURCE`
+  （基线文件 `MapOverlayOffsetSource.lua` **故意是空表**：这一档的补偿已烘进合成图像素里，活增量从零开始）。
+  ⇒ 渲染 / 编辑 / 守护 / 写后自证 / 体检**一行没改**就跟着走（「分派只收在几个口」的收益）。
+- 入口三处：`/erm` 面板**第三行并列单选勾**（`ermUI.marks[5]`；面板高度是派生量 348 → **374**）·
+  命令 `/erm 图层 原始图`（别名 `layer src` / `图层 原图`）· **顶栏按钮改成三档循环**
+  （实景 → 彩绘 → 原始图 → 实景；定序只在 `mapBtnTarget` 一处 + 新增助手 `MDQ.layerNameKey(mode)`
+  让「按钮文案 / 按钮提示 / 面板行名」三处档名同源）。
+- 三语：新增 `TB_SM_LAYER_SRC` / `TB_SM_LAYER_SRC_TIP1` / `ERM_MAPBTN_TO_SRC`；并把三语里把图层说成
+  「两档 / two layers / два слоя」的地方全部改成三档（`TB_SM_SWM_TIP3` · `TB_SM_LAYER_TIP1` · `ERM_CMD_HINT` ·
+  `ERM_MAPBTN_TIP2` · `ERM_MAPBTN_NOMAP`）——**行为改变了就必须说清，界面文案不许留旧话**。
+
+### 判据（本轮实跑）
+
+- `node luacheck.js` **SYNTAX OK: 75** · `node tmp/verify_worldsourcedata.js` **53 键 ↔ 53 文件** / 基线全
+  `1002,668,0,0` / 覆盖 ⊇ 实景表 52 键 ⊇ 彩绘表 41 键（**比另两档多 1 个键：`Balor`**）·
+  `verify_jpgdata.js` 52↔52 · `verify_paintdata.js` 41↔41 · `rel_version_check`（toc `0.2.8` ↔ `MDQ.BUILD` `0.2.8`）。
+- 出图自证：53 张**全部**「底图 12/12 ｜ 区域块 0 缺 ｜ 覆盖面 底 100% + 区域 19~69% = 100%」。
+- ★**如实**：本轮只过了**语法闸门 + 名录闸门 + 同步核对**；`tmp/erm_layer_harness.js`（181+55）按纪律等
+  「统一推送」，而且它**还没覆盖第三档**（欠账：加档后要补断言与反向钉）。
+
 ## 0.2.7 —— 2026-10-11（★两档素材**文件名加档后缀**：实景 `_re` / 彩绘 `_cn`）
 
 用户口令：「那把将所有纹理名称重命名一下后缀加一个 `_cn` 代表中文纹理. 实景后缀 `_re`」。
