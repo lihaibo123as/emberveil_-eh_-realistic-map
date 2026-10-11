@@ -1,0 +1,14 @@
+## Interface: 11200
+## Title: EH_RealisticMap |cff66ccff区域实景地图|r
+## Notes: 世界地图「区域实景」层（原宿主 EvalHelp 的「关闭世界迷雾 → 区域实景贴图」整块迁移而来）：按 MapOverlayJPGData.lua 的定位基线把 media\WorldMapJpg 里的实景图整区一张铺满地图帧（写 OVERLAY 绘制层，同组内优先级最高），外加接管守护（原生探索层全藏 + 按表自绘 + 数量/存在性每拍检查）与残留清理；编辑模式可逐块拖拽/箭头微调并落盘（补偿存本插件自己的 EH_REALISTICMAP_CFG）。命令 /erm（与旧 /ehm mapfit 子命令逐字同义）。
+## Author: EvalHelp
+## Version: 0.1.0
+## X-Category: Map
+## SavedVariables: EH_REALISTICMAP_CFG
+
+Locales\zhCN.lua
+Locales\enUS.lua
+Locales\ruRU.lua
+MapOverlayJPGData.lua
+MapOverlayOffsetJPG.lua
+EH_RealisticMap.lua
