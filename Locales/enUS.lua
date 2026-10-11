@@ -7,9 +7,11 @@ local t = {
   TB_SM_SWM = "Disable the world fog!",
   TB_SM_SWM_TIP1 = "初看是这个世界的,其实不是这个世界的.有没似陈相识?",
   TB_SM_SWM_TIP2 = "Some zone maps may be offset: report it in the addon comments or the QQ group and it will be corrected.",
-  TB_SM_SWM_TIP3 = "This version defaults to CHECKED (on) with the real-terrain layer; uncheck it to keep the client's original map (/reload needed to fully apply). Layer type: this row's [Settings].",
+  TB_SM_SWM_TIP3 = "This version defaults to CHECKED (on) with the real-terrain layer; uncheck it to keep the client's original map (/reload needed to fully apply). Layer type: the two check rows in the panel (real terrain / painted).",
   TB_SM_LAYER_JPG = "Layer: real terrain",
-  TB_SM_LAYER_TIP1 = "From this version there is ONLY the real-terrain layer (the colored-map layer was removed and its media\\WorldMap assets are no longer shipped): one stitched terrain image per zone (media\\WorldMapJpg), drawn on top within its group (OVERLAY draw layer). Fine-tune in edit mode.",
+  TB_SM_LAYER_TIP1 = "One stitched terrain image per zone (media\\WorldMapJpg), drawn on top within its group (OVERLAY draw layer). Fine-tune in edit mode. Radio-paired with \"Layer: painted\" below: each layer keeps its own offset data, switching never touches it and applies instantly (no /reload).",
+  TB_SM_LAYER_PAINT = "Layer: painted",
+  TB_SM_LAYER_PAINT_TIP1 = "One painted image per zone (media\\WorldMapPaint), sourced from the **UnrealMap** HD map textures (12 base tiles + area overlays = the fully-explored in-game picture), drawn on the same OVERLAY layer. Covers 41 zone maps (the 12 custom maps UnrealMap lacks fall back to the client's own map, no takeover). Fine-tune in edit mode, same tooling as the other layer.",
   TB_SM_EDIT = "Edit mode",
   TB_SM_EDIT_TIP1 = "Drag the fog tiles on the map to fine-tune their position (the compensation is saved and paired with the bundled baseline MapOverlayJPGData.lua). The list on the right supports multi-select: everything selected moves together. The arrows at the bottom of the list nudge by 1 pixel per click (Shift+click = 10).",
   WF_EDIT_TITLE = "Fog tiles · %s",
@@ -56,9 +58,18 @@ local t = {
   ERM_BD_STATE = "chrome=%s | GetBackdrop=%s",
   ERM_STATUS_TITLE = "status",
   ERM_SAVE_ROOT = "save root=%s (this add-on own store; the host save is read-only)",
-  ERM_CMD_HINT = "Commands (same sub-commands as the old `/ehm mapfit <sub>`, just a new prefix):\n/erm status | /erm swm on|off | /erm 编辑 on|off\n/erm 残留 | /erm 检查 | /erm 贴图 | /erm perf | /erm 重复 | /erm 微调\n/erm 编辑 配对 | 清 | 清全部 | 重置插件 本图|全部 | /erm 详细 on|off\n/erm 自检 (runs every read-only diagnostic + auto /reload)\nOffsets are stored in this add-on own save `EH_REALISTICMAP_CFG`; plugin baseline = `MapOverlayOffsetJPG.lua`.",
+  ERM_CMD_HINT = "Commands (same sub-commands as the old `/ehm mapfit <sub>`, just a new prefix):\n/erm status | /erm swm on|off | /erm 编辑 on|off\n/erm 图层 (status) | /erm 图层 实景 | /erm 图层 彩绘 (two layers, switch applies instantly) | /erm 图层 自证 (read-only: is the texture we wrote really on screen?)\n/erm 残留 | /erm 检查 | /erm 贴图 | /erm perf | /erm 重复 | /erm 微调\n/erm 编辑 配对 | 清 | 清全部 | 重置插件 本图|全部 | /erm 详细 on|off\n/erm 自检 (runs every read-only diagnostic + auto /reload)\nOffsets are stored in this add-on own save `EH_REALISTICMAP_CFG` (per layer: `editJpg` / `editPaint`); plugin baseline = `MapOverlayOffsetJPG.lua` / `MapOverlayOffsetPaint.lua`.",
   ERM_VERBOSE_SAY = "verbose = %s",
   ERM_UNKNOWN_SUB = "unknown sub-command: %s (usage below)",
+  -- ── 2026-10-11: the quick layer switch button on the world map top bar (same style as the client Zoom Out button)
+  ERM_MAPBTN_TO_PAINT = "To painted",
+  ERM_MAPBTN_TO_JPG = "To terrain",
+  ERM_MAPBTN_TIP1 = "Click = switch to \"%s\" | current layer: %s",
+  ERM_MAPBTN_TIP2 = "The two layers are peers; switching applies instantly (no /reload) and each layer keeps its own offset data. Same entries: the two check rows in the `/erm` panel, `/erm 图层 实景|彩绘`.",
+  ERM_MAPBTN_TIP3 = "Shown only while the world-fog switch is on - with it off the add-on draws nothing, so switching would change nothing on screen (enable it in the first row of the `/erm` panel, then /reload).",
+  ERM_MAPBTN_STATE = "top-bar quick button=%s | label=%s | zoom-out button=%s",
+  ERM_MAPBTN_NOMAP = "This map (%s) is not in the \"%s\" data table - that layer does not take it over (you see the client's own map), so switching changes nothing here; it only shows on zone maps that layer covers (continent and city maps are not covered by either layer).",
+  ERM_MAPBTN_NONE = "not built (parent WorldMapZoomOutButton missing)",
 }
 if type(EH_REALISTICMAP_L) ~= "table" then EH_REALISTICMAP_L = {} end
 EH_REALISTICMAP_L.enUS = t

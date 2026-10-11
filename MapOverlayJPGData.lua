@@ -1,5 +1,5 @@
--- ★★★生成物（**勿手改**）—— 生成器：`node tmp/gen_mapjpgdata.js`（源 = tmp/worldmaparea.dbc + media/WorldMapJpg）
---   用途：**实景图层**（区域实景 = `media\WorldMapJpg\<图>.jpg` 整区一张）在世界地图帧里的定位数据。
+-- ★★★生成物（**勿手改**）—— 生成器：`node tmp/gen_mapjpgdata.js`（源 = tmp/worldmaparea.dbc + addons/EH_RealisticMap/media/WorldMapJpg）
+--   用途：**实景图层**（区域实景 = `media\WorldMapJpg\<图>_re.jpg` 整区一张）在世界地图帧里的定位数据。
 --   形态：`EVAL_MAP_OVERLAY_JPG_DATA[地图文件名] = { 宽, 高, 偏移x, 偏移y }`
 --     · 单位 = **地图像素**（原点 = 地图帧左上、y 向下，与 `MapOverlayData.lua` 同口径）
 --     · 实景是**整区一张图** ⇒ 每张图**只有一条**记录（彩图那套是 [区域][块号] 两层）
@@ -32,7 +32,7 @@
 --     烘成插件基线走 `node gen_mapoffset.js --jpg` → `MapOverlayOffsetJPG.lua`（与彩图那套完全对称）。
 --   统计：图 52 张 ｜ 帧 1002x668 ｜ 主城关闭名单（按名跳过）：stormwind / darnassus / darnassis / thunderbluff
 EVAL_MAP_OVERLAY_JPG_DATA = {
-	["Alterac"]={1002,668,0,0}, ["AlteracValley"]={1002,668,0,0}, ["Arathi"]={1002,668,0,0}, ["Ashenvale"]={1002,668,0,0}, ["Aszhara"]={1002,668,0,0},
+	["AlteracValley"]={1002,668,0,0}, ["Alterac"]={1002,668,0,0}, ["Arathi"]={1002,668,0,0}, ["Ashenvale"]={1002,668,0,0}, ["Aszhara"]={1002,668,0,0},
 	["Badlands"]={1002,668,0,0}, ["Barrens"]={1002,668,0,0}, ["BlackstoneIsland"]={1002,668,0,0}, ["BlastedLands"]={1002,668,0,0},
 	["BurningSteppes"]={1002,668,0,0}, ["Darkshore"]={1002,668,0,0}, ["DeadwindPass"]={1002,668,0,0}, ["Desolace"]={1002,668,0,0},
 	["DunMorogh"]={1002,668,0,0}, ["Durotar"]={1002,668,0,0}, ["Duskwood"]={1002,668,0,0}, ["Dustwallow"]={1002,668,0,0},
@@ -47,4 +47,4 @@ EVAL_MAP_OVERLAY_JPG_DATA = {
 	["Winterspring"]={1002,668,0,0},
 }
 -- ★元信息（取证用：核对时写日志，一眼知道比对的是哪一版数据）
-EVAL_MAP_OVERLAY_JPG_META = { maps = 52, frame = "1002x668", src = "media/WorldMapJpg", gen = "gen_mapjpgdata.js" }
+EVAL_MAP_OVERLAY_JPG_META = { maps = 52, frame = "1002x668", src = "addons/EH_RealisticMap/media/WorldMapJpg", gen = "gen_mapjpgdata.js" }
