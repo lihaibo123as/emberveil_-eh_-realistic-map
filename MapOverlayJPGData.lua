@@ -45,6 +45,16 @@ EVAL_MAP_OVERLAY_JPG_DATA = {
 	["Teldrassil"]={1002,668,0,0}, ["ThalassianHighlands"]={1002,668,0,0}, ["ThousandNeedles"]={1002,668,0,0}, ["Tirisfal"]={1002,668,0,0},
 	["UngoroCrater"]={1002,668,0,0}, ["WesternPlaguelands"]={1002,668,0,0}, ["Westfall"]={1002,668,0,0}, ["Wetlands"]={1002,668,0,0},
 	["Winterspring"]={1002,668,0,0},
+	-- ★★★0.2.22：**主城**（用户：「实景地图只有雷霆崖和达纳苏斯采用实景，其他默认使用彩绘的主城图」）
+	--   · **采用实景图** = `ThunderBluff` / `Darnassis` ＋ `Darnassus`（原图从 `media\WorldMapJpg\_city\` **搬到顶层**，
+	--     素材是当年那批实景主城图本身；分辨率本就 500~834 px ⇒ 铺到 1002 帧是上采样、偏软 —— 这是既知代价）。
+	--   · **其余 4 座**（`Stormwind` / `Ogrimmar`＋`Orgrimmar` / `Ironforge` / `Undercity`）= **彩绘主城图的副本**
+	--     （`media\WorldMapPaint\<名>_cn.jpg` 的同一张图另存为 `<名>_re.jpg`）⇒ 实景档下这些城显示的是彩绘图。
+	--     ★**注意**：副本是**另一份文件**，以后改彩绘主城图时要**重新生成副本**（工具 = `tmp/erm_city_prep.js` + `tmp/erm_city_jpg.ps1`）。
+	--   · 基线同其它 52 图 = `{1002,668,0,0}`（主城矩形也是 1.5 比例）。
+	["ThunderBluff"]={1002,668,0,0}, ["Darnassis"]={1002,668,0,0}, ["Darnassus"]={1002,668,0,0},
+	["Stormwind"]={1002,668,0,0}, ["Ogrimmar"]={1002,668,0,0}, ["Orgrimmar"]={1002,668,0,0},
+	["Ironforge"]={1002,668,0,0}, ["Undercity"]={1002,668,0,0}
 }
 -- ★元信息（取证用：核对时写日志，一眼知道比对的是哪一版数据）
-EVAL_MAP_OVERLAY_JPG_META = { maps = 52, frame = "1002x668", src = "addons/EH_RealisticMap/media/WorldMapJpg", gen = "gen_mapjpgdata.js" }
+EVAL_MAP_OVERLAY_JPG_META = { maps = 60, frame = "1002x668", src = "addons/EH_RealisticMap/media/WorldMapJpg", gen = "gen_mapjpgdata.js" }

@@ -158,9 +158,9 @@ local MDQ = {}
 --   ② `/ehm mapfit 自检` 的落盘环表头与 `[1] 环境` 行（跟着那一次的读数一起存）。
 --   ★★★2026-10-10 迁移：本文件已不属于宿主 ⇒ **改记号跟本子插件的版本走**（`EH_RealisticMap.toc` 的 `## Version`，
 --     两者必须相等；宿主那套「三处一致」判据从本版起只管宿主自己的两处）。
-MDQ.BUILD = "0.2.17"
+MDQ.BUILD = "0.2.22"
 -- ★0.2.13：切档**是否换新纹理对象**（历史遗留开关）—— 默认 **false**（复用同一个对象、只换贴图）。
-MDQ.SWAP_OBJ_ON_SWITCH = false   -- ★2026-10-11：图层切换**只保留「区域实景」**（彩绘/原始图**临时关闭**，功能保留：见 MDQ.LAYER_OFF）
+MDQ.SWAP_OBJ_ON_SWITCH = false   -- ★0.2.20 现状：「区域实景」+「图层彩绘」两档在用（只关「原始图」，见 MDQ.LAYER_OFF）
 -- （0.2.9 的那句自述保留在 git 历史：`git show <0.2.9>:addons/EH_RealisticMap/EH_RealisticMap.lua`）   -- ★2026-10-11：加第三档「原始图」（LAYER_SRC：客户端美术合成的整图）+ 三档循环切换（与 .toc 的 ## Version 必须一致；闸门 = tmp/rel_version_check.js）
 
 -- ★★★1.75.60b：**编辑模式里的两个视图开关**（用户：「编辑模式右侧增加原始贴图层的显示和隐藏,迷雾贴图层的显示和隐藏」）
@@ -352,8 +352,11 @@ end
 --   「工具箱->关闭世界迷雾->设置: 区域彩图,区域实景,单选,实景数据源载入由之前验证成功的 jpg 方式载入.\media\WorldMapJpg」
 --   · **区域彩图**（`MDQ.LAYER_ART`）= 现行那套：按 `MapOverlayData.lua` 逐区域/逐块贴
 --     `media\WorldMap\<图>\<区域><块>.blp`（游戏世界地图那张手绘图）。
---   · **区域实景**（`MDQ.LAYER_JPG`，★1.75.65 起的**默认档**）= **整区一张** `media\WorldMapJpg\<图>_re.jpg`（地形实拍拼接）——
---     载入写法 = **不带扩展名**（1.75.62 真机验证（当时的「贴图格式测试」工具已在 1.75.69 清理，结论见 CHANGELOG 1.75.62）：插件目录里的散装 JPG 能画）。
+--   · **区域实景**（`MDQ.LAYER_JPG`，★1.75.65 起的**默认档**）= **整区一张** `media\WorldMapJpg\<图>_re.tga`（地形实拍拼接）——
+--     载入写法 = **不带扩展名**（客户端自己解扩展名）。★★★**扩展名必须是 `.tga`（0.2.18 真机定案）**：本客户端只能解
+--     **BLP / TGA**，`.jpg` 读不出（旧注释写的「散装 JPG 能画」**是错的**，就是它让「区域实景」这一层长期静默不生效）；
+--     BLP 那一轮 52 区三组全灭 ⇒ 散装文件可用写法**只有 TGA type-10 RLE**（未压缩 type-2 的大图会画成斜条纹）。
+--     `.jpg` 现在只作**原始素材**留档、不进包（见 `media\WorldMapJpg\README.txt`）。
 --   ★真值 = `ERM_CFG.layerMode`（"art" / "jpg"）。
 --   ★★★2026-10-10（用户：「工具箱->关闭世界迷雾->设置->**删除图层: 区域彩图**,插件打包的时候**也不要将这个资源打包进去**」）：
 --     **「区域彩图」这一层已删除，本版起只剩「区域实景」**。落地四条（缺一条就是半状态）：
@@ -441,9 +444,14 @@ MDQ.artMode = function() return MDQ.layerMode() == MDQ.LAYER_ART end
 --   ★★★0.2.12（用户：「WorldMapSource 这个先不要对接(这个数据不准).原始图面就是你上面刚完成恢复的数据集贴图」）：
 --     **WorldMapSource 那套整条不平移进来** —— 它那两张表已从 `.toc` 撤下（文件留在磁盘、可随时放回），
 --     素材也不进子包（`pack_subaddons.ps1` 已把它列进不发货清单）；`LAYER_SRC` 只剩**旧存档 id 兼容**（读/写两口归一成 `"art"`）。
-MDQ.LAYER_OFF = { [MDQ.LAYER_PAINT] = true, [MDQ.LAYER_ART] = true }
--- ★0.2.16（用户：「先关闭原始图功能.不调试了」）：「原始图」一档也临时关闭 ⇒ 只留「区域实景」。
---   ★恢复 = 把上面那行里的 [MDQ.LAYER_ART] = true 去掉（一个字）；素材/表都还在磁盘上（只是不进包）。
+MDQ.LAYER_OFF = { [MDQ.LAYER_ART] = true }
+-- ★0.2.16（用户：「先关闭原始图功能.不调试了」）：「原始图」一档临时关闭。
+-- ★★★0.2.20（用户：「WorldMapPaint 将图层切换功能增加回去.支持 WorldMapPaint WorldMapJpg 这两种图层切换」）：
+--   **「图层彩绘」放回来了** ⇒ 现行只关「原始图」。落地三件（缺一件就是「切过去一片默认图」）：
+--     ① 本表去掉 `[MDQ.LAYER_PAINT]`；② `.toc` 加回 `MapOverlayPaintData.lua` + `MapOverlayOffsetPaint.lua`
+--     （不载入 ⇒ `MDQ.paintTbl()` 是 nil ⇒ `paintBase` 返 nil ⇒ 本图不接管，**且载入期会如实报一句**）；
+--     ③ 素材 = `media\WorldMapPaint\<图>_cn.jpg`（本地开发直接吃 jpg；**出包时转 TGA 再进 zip** —— 见 §打包）。
+--   ★恢复「原始图」= 把本表改回 `{ [MDQ.LAYER_PAINT] = true, [MDQ.LAYER_ART] = true }` 并把它的两行 toc 加回。
 MDQ.layerOn = function(m)
   if m == MDQ.LAYER_JPG then return true end
   if type(MDQ.LAYER_OFF) == "table" and MDQ.LAYER_OFF[m] == true then return false end
@@ -7045,16 +7053,27 @@ end
 --        再叠上总开关（`MDQ.swm()`）⇒ **不挂节拍、不常驻**（本项目「用的时候才启用、不用就关」）。
 --      ★宿主或锚点缺席（换客户端 / 被别的插件改过）⇒ **如实降级**：入口只剩 `/erm` 面板与命令，
 --      绝不报错、也绝不硬造一个全局（本项目「拿不到就一个字节都不碰」）。
---   ③ **文字 = 「点一下会发生什么」**（用户在候选里选定的那一种）：当前实景 ⇒ 写「切换到彩绘」；
---      当前彩绘 ⇒ 写「切换到实景」。★**真值只有一处**（`MDQ.layerMode()`），每次 `layerSet` / `fogSet` /
---      载入期都重画一次 ⇒ 按钮上写的永远等于真值（本项目「勾选状态每次由数据重算」同一把尺子，
---      **绝不靠按钮自己那份状态**）。
---   ④ **总开关关着就收起**（`MDQ.swm() == false` ⇒ `Hide`）：那一刻插件压根不画地图，按钮写「切换到彩绘」
---      就是骗人（点了屏幕上什么都不会变）⇒ 收起，并把「为什么看不见」写进悬停第 3 行。
+--   ③ ★★★**文字 = 「点一下会发生什么」= 三态**（★0.2.20 用户：「WorldMapPaint 将图层切换功能增加回去.支持 WorldMapPaint WorldMapJpg 这两种图层切换」）：
+--      · 总开关关着 ⇒ 「**开启实景**」（点一下把实景开回来 —— 0.2.19 那轮用户点名要的能力，**保留**）
+--      · 开着 + 当前实景 ⇒ 「**切换到彩绘**」· 开着 + 当前彩绘 ⇒ 「**切换到实景**」
+--      ★**真值只有两处**（`MDQ.swm()` / `MDQ.layerMode()`），且**只经 `MDQ.mapBtnWant()` 一处取**；
+--      `MDQ.mapBtnSync()` 在 `fogSet` / `layerSet` / 载入期 / 「缩小」显隐变化时各重画一次 ⇒ 按钮上写的永远等于真值
+--      （本项目「勾选状态每次由数据重算」同一把尺子，**绝不靠按钮自己那份状态**）。
+--      ★**为什么不是「三档循环」**：三档现在只放回两档（「原始图」仍 `MDQ.LAYER_OFF`）⇒ 循环与「两档切换」等价，
+--      但**关着总开关那一态必须留着**（否则地图上再也没法把实景开回来）；档的切换另有面板两行与 `/erm 图层 …`。
+--      ★**以后再把原始图放回来**：把 `MDQ.mapBtnWant()` 的档循环扩成三档即可（文案/提示/点击三处自动跟上）。
+--   ④ ★★★**总开关关着也**要显示（★0.2.19 改：旧口径是「关着就收起」）—— 按钮**现在就是那个开关本身**，
+--      关着的时候收起 = 用户再也开不回来（真机上就是「关掉以后按钮不见了、只能去翻面板」）。
+--      ⇒ 显隐**只跟客户端那个「缩小」按钮走**（最小化/还原跟着客户端）。
 --   ⑤ **点我们自己的按钮 = 用户主动问的** ⇒ 先盖章 `wfEcho()` 再动手（「调试日志」关着时那几句回显也要看得见，
---      与面板按钮同一条纪律）。
+--      与面板按钮同一条纪律）；两条动作**各走各的唯一写口**：开总开关 = `MDQ.fogSet(true)`（与面板第一行 / `/erm` 同一口）、
+--      切档 = `MDQ.layerSet(mode)`（与面板那两行 / `/erm 图层 …` 同一口）—— **绝不直接写 `ERM_CFG`**。
+--      ★**沿用 `fogSet` 原有的回显与「需要 /reload」确认窗**（那是 1.75.59c 用户点名要的行为）⇒ 切总开关时会看到
+--      一两行播报 + 一个确认窗（**切档不加提示**：`layerSet` 自 0.2.17 起就不打档名播报了）。
+--      ★要「地图上点着更轻」就把 `fogSet` 那两行改安静（`fogSet(true, true)` + 自己回一行），但那属于
+--      **用户可见的行为改变**，等点名再改。
 --   ★★实现上**一个文件级 local 都不新增**（主 chunk 局部量有上限）：句柄与四个口全挂 `MDQ` 表
---     （`MDQ.mapBtn` 句柄 / `mapBtnTarget` / `mapBtnLabel` / `mapBtnTip` / `mapBtnEnsure` / `mapBtnSync` / `mapBtnLine`）。
+--     （`MDQ.mapBtn` 句柄 / `mapBtnWant` / `mapBtnLabel` / `mapBtnTip` / `mapBtnEnsure` / `mapBtnSync` / `mapBtnLine`）。
 --   · 挂/建**唯一入口** = `MDQ.mapBtnEnsure()`（幂等；建不出来返回 nil ⇒ 下次再试 = 自愈）
 --   · 重画**唯一入口** = `MDQ.mapBtnSync()`（文案 + 显隐）—— 调用点四处：载入期(VLA) / `layerSet` / `fogSet`
 --     / 「缩小」按钮的 `OnShow`·`OnHide`（最小化·还原）
@@ -7065,21 +7084,17 @@ local function mapBtnObj(v)
   local t = type(v)
   return (t == "table") or (t == "userdata")
 end
-function MDQ.mapBtnTarget()
-  -- 「点一下会切到哪一档」= 按**档序**的下一档：实景 → 彩绘 → 原始图 → 实景…（三档循环）
-  --   ★2026-10-11 加第三档时**只改这一个函数**：按钮文案、提示、点击动作全都读它（唯一来源）。
-  local m = MDQ.layerMode()
-  -- ★临时关闭的档不进循环（`MDQ.layerOn`）⇒ 只剩实景时**停在实景**（点它无副作用）
-  if m == MDQ.LAYER_JPG then
-    if MDQ.layerOn(MDQ.LAYER_PAINT) then return MDQ.LAYER_PAINT end
-    if MDQ.layerOn(MDQ.LAYER_ART) then return MDQ.LAYER_ART end
-    return MDQ.LAYER_JPG
-  end
-  if m == MDQ.LAYER_PAINT then
-    if MDQ.layerOn(MDQ.LAYER_ART) then return MDQ.LAYER_ART end
-    return MDQ.LAYER_JPG
-  end
-  return MDQ.LAYER_JPG
+function MDQ.mapBtnWant()
+  -- ★★★0.2.20（用户：「WorldMapPaint 将图层切换功能增加回去.支持 WorldMapPaint WorldMapJpg 这两种图层切换」）：
+  --   按钮 = **三态**，每一态的文案都写「点一下会发生什么」（0.2.1 起那条口径一个字没改）：
+  --     ① 总开关关着 ⇒ `("fog", true)` = 地图上点一下就把实景**开回来**（0.2.19 用户点名要的，保留）
+  --     ② 开着 + 当前实景 ⇒ `("layer", LAYER_PAINT)` = 切到彩绘
+  --     ③ 开着 + 当前彩绘 ⇒ `("layer", LAYER_JPG)` = 切到实景
+  --   ★返回 (动作, 目标)：文案 / 提示 / 点击三处只读它（唯一来源）⇒ 以后加档只改这一个函数。
+  --   ★返回**两个值**（不是布尔、也不是档名）：动作区分「开总开关」与「切图层」两条不同的唯一写口。
+  if not MDQ.swm() then return "fog", true end
+  if MDQ.layerMode() == MDQ.LAYER_PAINT then return "layer", MDQ.LAYER_JPG end
+  return "layer", MDQ.LAYER_PAINT
 end
 -- ★每一档的**界面名语言键**（唯一来源：面板行名、按钮文案、提示里的档名全用它 ⇒ 加档不漏文案）
 function MDQ.layerNameKey(mode)
@@ -7089,12 +7104,12 @@ function MDQ.layerNameKey(mode)
   return "TB_SM_LAYER_JPG"
 end
 function MDQ.mapBtnLabel()
-  local t = MDQ.mapBtnTarget()
-  -- ★没有可切的档（其余临时关闭）⇒ 不写「切换到实景」这种骗人的话
-  if t == MDQ.layerMode() then return L("ERM_MAPBTN_OFF") end
-  if t == MDQ.LAYER_PAINT then return L("ERM_MAPBTN_TO_PAINT") end
-  if t == MDQ.LAYER_SRC then return L("ERM_MAPBTN_TO_SRC") end
-  return L("ERM_MAPBTN_TO_JPG")
+  -- ★文案 = 「点一下会发生什么」（0.2.20：三态 —— 开启实景 / 切到彩绘 / 切到实景）
+  --   真值只有 `MDQ.swm()` 与 `MDQ.layerMode()` 两处，且只经 `MDQ.mapBtnWant()` 一处取
+  local act, tgt = MDQ.mapBtnWant()
+  if act == "fog" then return L("ERM_MAPBTN_TURN_ON") end          -- 总开关关着 ⇒ 点它 = 开启实景
+  if tgt == MDQ.LAYER_PAINT then return L("ERM_MAPBTN_TO_PAINT") end
+  return L("ERM_MAPBTN_TO_JPG")                                    -- 点它 = 切到实景
 end
 -- ★★★2026-10-11（用户报障「重复点击只有第一次生效，之后没变化」的关键一条）：
 --   **本图在某一档的基表里到底有没有数据** —— 大陆图 / 主城 / UnrealMap 没有的那 11 张自定义图
@@ -7117,18 +7132,19 @@ function MDQ.mapBtnMapIn(mode)
   return (MDQ.jpgBase(f) ~= nil)
 end
 function MDQ.mapBtnTip()
+  local act, tgt = MDQ.mapBtnWant()
+  local chk = (act == "fog") and MDQ.layerMode() or tgt   -- 要判「有没有数据」的那一档
   local out = {
-    string.format(L("ERM_MAPBTN_TIP1"),
-      L(MDQ.layerNameKey(MDQ.mapBtnTarget())), MDQ.frameLabel()),
-    L("ERM_MAPBTN_TIP2"),
+    string.format(L("ERM_MAPBTN_TIP1"), MDQ.mapBtnLabel()),                        -- 一个参（= 按钮文案本身）
+    string.format(L("ERM_MAPBTN_TIP2"), L(MDQ.layerNameKey(MDQ.layerMode()))),     -- 当前档 + 两档可切
     L("ERM_MAPBTN_TIP3"),
   }
-  -- ★本图这一档不接管 ⇒ **多一行如实说明**（否则「切了没反应」会被当成 bug，而它其实是有意为之）
+  -- ★目标档在本图没有数据 ⇒ **多一行如实说明**（否则「切了看不出变化」会被当成 bug，而它其实是有意为之）
   --   ★行数组里**不许有 nil**（会截断后面的行）⇒ 只在确定「没有」时才 append
-  if MDQ.mapBtnMapIn(MDQ.layerMode()) == false then
+  if MDQ.mapBtnMapIn(chk) == false then
     local f = select(1, mapInfo())
     out[#out + 1] = string.format(L("ERM_MAPBTN_NOMAP"), tostring(f),
-      L(MDQ.layerNameKey(MDQ.layerMode())))
+      L(MDQ.layerNameKey(chk)))
   end
   return out
 end
@@ -7199,13 +7215,16 @@ function MDQ.mapBtnEnsure()
     --   与 `　上一拍渲染：… ｜ 写 X / 跳 Y ｜ 写的对象=userdata… ｜ 来源=… ｜ 自证：… ｜ 显示中非我们: <6 个瓦片名>`；
     --   真机上每行折成 3~4 行聊天，而且**每次点击都跑一遍 `MDQ.selfProbe()`**（写哨兵 alpha + 枚举 region）。
     --   ⇒ 现在点击**只留 `layerSet` 那一行短回显**；要看这些账就敲 `/erm 图层 自证`（只读、你问它答）。
-    local target = MDQ.mapBtnTarget()
-    pcall(MDQ.layerSet, target)
-    -- ★「本图这一档不接管」仍然如实说一句（否则「切了没反应」与「按钮坏了」无从分辨）；
-    --   覆盖不到的图（大陆 / 主城 / 11 张自定义图）本来就一个像素都不会变 —— 这是有意为之，不是 bug。
-    if MDQ.mapBtnMapIn(target) == false then
+    -- ★★★0.2.20：三态动作 —— 关着 ⇒ 开总开关（`MDQ.fogSet`）；开着 ⇒ 在「区域实景 / 图层彩绘」两档之间切
+    --   （`MDQ.layerSet`）。两处都走各自的**唯一写口**，不直接写 `ERM_CFG`。
+    local act, tgt = MDQ.mapBtnWant()
+    if act == "fog" then pcall(MDQ.fogSet, tgt) else pcall(MDQ.layerSet, tgt) end
+    -- ★「目标档在本图没有数据」仍然如实说一句（否则「切了没变化」与「按钮坏了」无从分辨）；
+    --   覆盖不到的图（大陆 / 主城 / UnrealMap 没有的那 11 张）本来就一个像素都不会变 —— 这是有意为之，不是 bug。
+    local chk = (act == "fog") and MDQ.layerMode() or tgt
+    if MDQ.mapBtnMapIn(chk) == false then
       say(string.format("　" .. L("ERM_MAPBTN_NOMAP"), tostring(select(1, mapInfo()) or "?"),
-        L(MDQ.layerNameKey(target))))
+        L(MDQ.layerNameKey(chk))))
     end
     pcall(MDQ.mapBtnSync)
   end)
@@ -7227,9 +7246,10 @@ function MDQ.mapBtnSync()
     pcall(b.SetText, b, s)
   end
   pcall(MDQ.mapBtnRaise)                                 -- ★每拍对上账：客户端改了层级就被追回来
-  -- ★显隐 = 总开关 ∧ 「缩小」按钮显示着（最小化/还原直接跟着客户端走）——
+  -- ★★★显隐 = **只跟「缩小」按钮走**（最小化/还原直接跟着客户端）—— ★0.2.19 起**不再叠加总开关**：
+  --   按钮现在就是那个开关本身，关着时收起 = 用户再也开不回来（真机形态就是「关掉后按钮不见了」）。
   --   项目可见性契约：**显式显隐**，不靠父帧传播
-  if MDQ.swm() and MDQ.mapBtnZoomOK() then pcall(b.Show, b) else pcall(b.Hide, b) end
+  if MDQ.mapBtnZoomOK() then pcall(b.Show, b) else pcall(b.Hide, b) end
   return true
 end
 function MDQ.mapBtnLine()

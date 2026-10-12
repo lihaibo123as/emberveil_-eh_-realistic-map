@@ -60,17 +60,22 @@ local t = {
   ERM_SAVE_ROOT = "存档根=%s（本插件自己的记忆体；宿主存档只读）",
   ERM_CMD_HINT = "命令（与以前 `/ehm mapfit <子命令>` 逐字同义，换个前缀就行）：\n/erm 状态 ｜ /erm swm on|off ｜ /erm 编辑 on|off\n/erm 图层（看状态）｜ /erm 图层 实景 ｜ /erm 图层 彩绘 ｜ /erm 图层 原始图（三档并列切换，当场生效）｜ /erm 图层 自证（只读：我们写的那个纹理到底上屏了没）\n/erm 残留 ｜ /erm 检查 ｜ /erm 贴图 ｜ /erm perf ｜ /erm 重复 ｜ /erm 微调\n/erm 编辑 配对 | 清 | 清全部 | 重置插件 本图|全部 ｜ /erm 详细 on|off\n/erm 自检（一条命令跑完全部只读诊断 + 自动 /reload 落盘）\n编辑补偿存本插件存档 `EH_REALISTICMAP_CFG`（三档分开：`editJpg` / `editPaint` / `editSrc`）；插件基线 = 同目录 `MapOverlayOffsetJPG.lua` / `MapOverlayOffsetPaint.lua` / `MapOverlayOffsetSource.lua`。",
   ERM_UNKNOWN_SUB = "未知子命令：%s（下面是用法）",
-  -- ── 2026-10-11：世界地图顶栏那个「彩绘 / 实景」快捷切换按钮（样式 = 客户端「缩小」按钮同款）
+  -- ── 2026-10-11：世界地图顶栏那个快捷按钮（样式 = 客户端「缩小」按钮同款）
+  --    ★★2026-10-12（0.2.19，用户：「大地图添加的按钮: 功能调整为开启/关闭实景」）：按钮 = **实景开关**。
+  --      `ERM_MAPBTN_OFF` / `ERM_MAPBTN_TO_JPG` 现在是**开/关实景**的文案（旧义「其余图层临时关闭 / 切换到实景」已废）；
+  --      `ERM_MAPBTN_TO_PAINT` / `TO_SRC` **暂未引用**（三档循环已撤，等彩绘/原始图放回来再用，留着无副作用）。
   ERM_MAPBTN_TO_PAINT = "切换到彩绘",
   ERM_MAPBTN_TO_SRC = "切换到原始图",
-  ERM_MAPBTN_OFF = "其余图层临时关闭",
+  ERM_MAPBTN_OFF = "关闭实景",
+  -- ★0.2.20：总开关关着那一态的按钮文案（「关闭实景」= `ERM_MAPBTN_OFF` 暂未引用，留着无副作用）
+  ERM_MAPBTN_TURN_ON = "开启实景",
   ERM_LAYER_OFF = "「%s」这一档已临时关闭（功能与素材都保留，只是先不启用）⇒ 当前只用「区域实景」",
   ERM_MAPBTN_TO_JPG = "切换到实景",
-  ERM_MAPBTN_TIP1 = "点一下 = 立刻切到「%s」｜ 当前档：%s",
-  ERM_MAPBTN_TIP2 = "三档并列可切换（实景 → 彩绘 → 原始图 → 实景…），**切换当场生效、不用 /reload**；各档的编辑补偿各存各的，切换一个字都不动。同款入口：`/erm` 面板里那三行勾选、`/erm 图层 实景|彩绘|原始图`。",
-  ERM_MAPBTN_TIP3 = "★本按钮只在「世界迷雾」开着时显示 —— 关着的时候插件不画地图，切了屏幕上也看不出变化（要开：`/erm` 面板第一行勾上并 /reload）。",
+  ERM_MAPBTN_TIP1 = "点一下：%s（世界地图图层按钮）",
+  ERM_MAPBTN_TIP2 = "当前档：%s ｜ 两档并列可切换（区域实景 ↔ 图层彩绘），切换当场生效、不用 /reload；各档的编辑补偿各存各的。",
+  ERM_MAPBTN_TIP3 = "总开关关着时这颗按钮写「开启实景」（点它把实景开回来）；也可以走 /erm 面板那两行勾选或 /erm 图层 实景|彩绘。「原始图」档仍临时关闭。",
   ERM_MAPBTN_STATE = "顶栏快捷按钮=%s ｜ 文案=%s ｜ 缩小按钮=%s",
-  ERM_MAPBTN_NOMAP = "★本图（%s）**不在「%s」的数据表里** ⇒ 这一档不接管它（画面是客户端自己的地图），所以**切换看不出变化**；切到有数据的区域图才有效果（大陆图 / 主城图三档都不接管）。",
+  ERM_MAPBTN_NOMAP = "★本图（%s）不在「%s」的数据表里：这一层不接管它（画面是客户端自己的地图），所以开起来也看不出变化（大陆图 / 主城图不接管）。",
   ERM_MAPBTN_NONE = "未建（父帧 WorldMapZoomOutButton 不在）",
 }
 if type(EH_REALISTICMAP_L) ~= "table" then EH_REALISTICMAP_L = {} end

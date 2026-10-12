@@ -1,4 +1,7 @@
-# EH_RealisticMap —— 世界地图「区域实景 / 图层彩绘」+ 世界迷雾接管
+# EH_RealisticMap
+
+> ★0.2.18（2026-10-12）：运行期实景素材 = `<图>_re.tga`（**TGA 24bit RLE**，52 张，197.6 MB）—— 本客户端只能解 BLP / TGA，
+> 此前的 `.jpg` **读不出来**（叠加启动器丢 `.jpg`）⇒ 「区域实景」长期静默不生效。`.jpg` 现在只作**原始素材**留档、不进包。 —— 世界地图「区域实景 / 图层彩绘」+ 世界迷雾接管
 
 > **EvalHelp 的可选子插件**：配置窗（`/eh cfg`）→ 第 ⑦ 页「子插件」→ 勾选 `EH_RealisticMap` → `/reload`。
 > 本插件 = 原来宿主「**关闭世界迷雾 → 区域实景贴图**」那一整块（表驱动实景渲染 + 接管守护 + 残留清理 +
@@ -24,16 +27,16 @@
 1. **整区图层（本插件的门面）—— 三档并列可切换**
    打开世界地图，把一整张区域图**铺满 1002×668 的地图帧**，并写在 **`OVERLAY` 绘制层**（同组内优先级最高）。
    三档任选（`/erm` 面板里那三行勾选，或 `/erm 图层 实景` / `/erm 图层 彩绘` / `/erm 图层 原始图`，**切换当场生效、不用 `/reload`**）：
-   - **区域实景**（默认）：`media\WorldMapJpg\<图>_re.jpg` 的 **AI 高清地形实拍拼接图**，共 **52 张区域图**。
+   - **区域实景**（默认）：`media\WorldMapJpg\<图>_re.tga` 的 **AI 高清地形实拍拼接图**，共 **52 张区域图**。
    - **原始图**（0.2.9 新增）：`media\WorldMapSource\<图>_src.jpg` —— **把客户端自己的地图美术合成成一张完整整图**
      （4×3 基础底图 + 区域块，位置 = 定位表值 + 你调的补偿）⇒ 就是游戏里「全探索」时的那张图，**53 张区域图全有**。
    - **图层彩绘**（0.2.0 新增）：`media\WorldMapPaint\<图>_cn.jpg` 的**游戏重绘风格**整区图，共 **41 张** —— 素材来自
      外部高清地图包 **UnrealMap**（12 块基础瓦片打底 + 区域块叠加 = 游戏里「全探索」时的画面）。
      那 11 张 UnrealMap 没有的自定义图（Hyjal / Lapidis / Gilneas / Icepoint / Northwind …）**自动交回客户端地图**。
    ★**两档的编辑补偿各存各的**（`editJpg` / `editPaint`），切换一个字都不动。
-   ★**顶栏那颗快捷按钮**（0.2.1 新增）：打开地图后，「**缩小**」按钮的右边紧挨着一颗同款按钮，
-   文字写的是「**切换到彩绘 / 实景 / 原始图**」（= 点一下会切到哪一档），**三档循环**，点一下当场切换。
-   ★它只在总开关开着、且地图**没有最小化**时显示（跟着客户端那个「缩小」按钮一起显隐）。
+   ★**顶栏那颗快捷按钮**（0.2.1 新增 · **0.2.19 起 = 实景开关**）：打开地图后，「**缩小**」按钮的右边紧挨着一颗同款按钮，
+   文字写的是「**关闭实景 / 开启实景**」（= 点一下会发生什么），**点一下当场开/关**（与「子插件」面板第一行、`/erm` 命令同一个开关）。
+   ★它只在**地图没最小化**时显示（跟着客户端那个「缩小」按钮一起显隐）；★**关着的时候按钮照样在** —— 否则你就没法用它把实景开回来了。
    ★**主城已交回客户端**：暴风城 / 达纳苏斯 / 雷霆崖 / 奥格瑞玛 / 幽暗城 / 铁炉堡这六座城里，本插件
    **一帧都不画、也不碰客户端的层** —— 你看到的是客户端自带那张城图（含室内平面图）。
 
@@ -105,7 +108,7 @@
 | **本插件自己的存档**（开关 / 编辑模式 / 逐块补偿） | `SavedVariables\EH_RealisticMap.lua` 的 **`EH_REALISTICMAP_CFG`**（宿主存档**只读**，一个字节都不写） |
 | **定位基线**（每图一条 `{宽,高,偏移x,偏移y}`，**生成物**） | `MapOverlayJPGData.lua`（实景）· `MapOverlayPaintData.lua`（彩绘） |
 | **插件偏移量基线**（发布给别人的矫正值，**生成物**） | `MapOverlayOffsetJPG.lua` / `MapOverlayOffsetPaint.lua`（生效次序 = 存档 > 文件 > 无） |
-| **实景图库** | `media\WorldMapJpg\<图>_re.jpg`（52 张区域图；`_city\` 4 张主城图**不随包发货**，只留本机） |
+| **实景图库** | `media\WorldMapJpg\<图>_re.tga`（52 张区域图；`_city\` 4 张主城图**不随包发货**，只留本机） |
 | **彩绘图库**（0.2.0 新增） | `media\WorldMapPaint\<图>_cn.jpg`（41 张；素材派生自 UnrealMap 的高清地图贴图） |
 | **原始图库**（0.2.9 新增） | `media\WorldMapSource\<图>_src.jpg`（53 张；把客户端自己的美术合成成整图，生成器 `tmp/gen_worldmapsource.js`） |
 | **三语文案** | `Locales\{zhCN,enUS,ruRU}.lua` |
@@ -129,7 +132,7 @@
 
 `EH_RealisticMap.toc` · `EH_RealisticMap.lua`（主源码）· `Locales\{zhCN,enUS,ruRU}.lua` ·
 `MapOverlayJPGData.lua` · `MapOverlayOffsetJPG.lua` · `MapOverlayPaintData.lua` · `MapOverlayOffsetPaint.lua` ·
-`media\WorldMapJpg\`（52 图 `<图>_re.jpg` + `_city\` 4 图不发货）· `media\WorldMapPaint\`（41 图 `<图>_cn.jpg`）·
+`media\WorldMapJpg\`（52 图 `<图>_re.tga` + `_city\` 4 图不发货）· `media\WorldMapPaint\`（41 图 `<图>_cn.jpg`）·
 `media\WorldMapSource\`（53 图 `<图>_src.jpg`）·
 `preview\`（本文截图，**不随包发货**）。
 

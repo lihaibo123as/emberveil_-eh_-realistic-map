@@ -60,17 +60,22 @@ local t = {
   ERM_SAVE_ROOT = "save root=%s (this add-on own store; the host save is read-only)",
   ERM_CMD_HINT = "Commands (same sub-commands as the old `/ehm mapfit <sub>`, just a new prefix):\n/erm status | /erm swm on|off | /erm 编辑 on|off\n/erm 图层 (status) | /erm 图层 实景 | /erm 图层 彩绘 | /erm 图层 原始图 (three layers, switch applies instantly) | /erm 图层 自证 (read-only: is the texture we wrote really on screen?)\n/erm 残留 | /erm 检查 | /erm 贴图 | /erm perf | /erm 重复 | /erm 微调\n/erm 编辑 配对 | 清 | 清全部 | 重置插件 本图|全部 | /erm 详细 on|off\n/erm 自检 (runs every read-only diagnostic + auto /reload)\nOffsets are stored in this add-on own save `EH_REALISTICMAP_CFG` (per layer: `editJpg` / `editPaint` / `editSrc`); plugin baseline = `MapOverlayOffsetJPG.lua` / `MapOverlayOffsetPaint.lua` / `MapOverlayOffsetSource.lua`.",
   ERM_UNKNOWN_SUB = "unknown sub-command: %s (usage below)",
-  -- ── 2026-10-11: the quick layer switch button on the world map top bar (same style as the client Zoom Out button)
-  ERM_MAPBTN_TO_PAINT = "To painted",
+  -- ── 2026-10-11: the quick button on the world map top bar (same style as the client Zoom Out button)
+  --    ★★2026-10-12 (0.2.19 -> 0.2.20): the button is a three-state control -- "Turn terrain on" while
+  --      the master switch is off, otherwise it switches between the two live layers (terrain <-> painted).
+  --      ERM_MAPBTN_OFF / TO_SRC are currently unreferenced (kept for when that layer comes back).
+  ERM_MAPBTN_TO_PAINT = "Switch to painted",
   ERM_MAPBTN_TO_SRC = "To original",
-  ERM_MAPBTN_OFF = "Other layers off",
+  ERM_MAPBTN_OFF = "Turn terrain off",
+  -- 0.2.20: label for the master-switch-off state (ERM_MAPBTN_OFF itself is currently unreferenced)
+  ERM_MAPBTN_TURN_ON = "Turn terrain on",
   ERM_LAYER_OFF = "The \"%s\" layer is temporarily disabled (code and assets kept) - only the real-terrain layer is active for now.",
-  ERM_MAPBTN_TO_JPG = "To terrain",
-  ERM_MAPBTN_TIP1 = "Click = switch to \"%s\" | current layer: %s",
-  ERM_MAPBTN_TIP2 = "The three layers are peers (real -> painted -> original -> real...); switching applies instantly (no /reload) and each layer keeps its own offset data. Same entries: the three check rows in the `/erm` panel, `/erm 图层 实景|彩绘|原始图`.",
-  ERM_MAPBTN_TIP3 = "Shown only while the world-fog switch is on - with it off the add-on draws nothing, so switching would change nothing on screen (enable it in the first row of the `/erm` panel, then /reload).",
+  ERM_MAPBTN_TO_JPG = "Switch to terrain",
+  ERM_MAPBTN_TIP1 = "Click: %s (world-map layer button)",
+  ERM_MAPBTN_TIP2 = "Current layer: %s | the two layers are peers (real terrain <-> painted), switching applies instantly and needs no /reload; each layer keeps its own offset data.",
+  ERM_MAPBTN_TIP3 = "While the master switch is off this button reads \"Turn terrain on\" (click it to bring the terrain back); you can also use the two check rows of the /erm panel or /erm (layer command). The original-art layer is still disabled.",
   ERM_MAPBTN_STATE = "top-bar quick button=%s | label=%s | zoom-out button=%s",
-  ERM_MAPBTN_NOMAP = "This map (%s) is not in the \"%s\" data table - that layer does not take it over (you see the client's own map), so switching changes nothing here; it only shows on zone maps that layer covers (continent and city maps are not covered by either layer).",
+  ERM_MAPBTN_NOMAP = "This map (%s) is not in the \"%s\" data table: that layer does not take it over (you see the client's own map), so turning it on changes nothing here. It only shows on zone maps that layer covers (continent and city maps are not covered).",
   ERM_MAPBTN_NONE = "not built (parent WorldMapZoomOutButton missing)",
 }
 if type(EH_REALISTICMAP_L) ~= "table" then EH_REALISTICMAP_L = {} end

@@ -4,12 +4,19 @@
 **整目录排除出发布包**。运行期表现 = 打开主城时 `MDQ.jpgBase` 拿不到数据 ⇒ 实景**一帧都不画、也不藏
 客户端的层** ⇒ 看到的就是**客户端自带的那张城图**。★要恢复：清空 `CITY_OFF` + 把图挪回顶层 + 重跑生成器。
 
-「区域实景」贴图放这里（整张图一张 JPG，等比铺满地图帧 1002x668）
+「区域实景」贴图放这里（整张图一张图，等比铺满地图帧 1002x668）
+
+★★★2026-10-12 起：**运行期素材是 TGA（24bit RLE），不是 JPG** ——
+    本客户端只能解 BLP / TGA，`.jpg` 读不出来；启动器安装时又会把 `.jpg` 丢掉。此前图库里放 JPG ⇒
+    「区域实景」这一层**从来没有真正生效过**（探针判「没有」⇒ 不接管 ⇒ 看到的一直是客户端默认图）。
+    真机三组对照：TGA **type-2 未压缩** 不出图 · TGA **type-10 RLE** 出图 · BLP2 DXT5 不出图 ⇒ **唯一可用写法 = TGA type-10 RLE**。
 
 命名约定（与 MapOverlayJPGData.lua 的键一一对应）：
-    media\WorldMapJpg\<图名>.jpg          ← 图名 = 客户端 GetMapInfo() 报的**地图文件名**
+    media\WorldMapJpg\<图名>_re.tga       ← 运行期素材（TGA 24bit RLE）· 图名 = 客户端 GetMapInfo() 报的**地图文件名**
+    media\WorldMapJpg\<图名>_re.jpg       ← **原始素材**（转换用，不进包；生成器 tmp/erm_tga_gen.js 的输入）
 代码里引用时**不带扩展名**（`Interface\AddOns\EvalHelp\media\WorldMapJpg\<图名>`），
-这条写法由 1.75.62 的「贴图格式测试」在真机验证（该测试工具与 media\TexTest\ 已在 1.75.69 清理，结论见 CHANGELOG 1.75.62）。
+这条写法由 1.75.62 的「贴图格式测试」在真机验证（该测试工具与 media\TexTest\ 已在 1.75.69 清理，结论见 CHANGELOG 1.75.62）：
+**不带扩展名最稳**，客户端自己解 `.tga`（0.2.18 真机复核：`.blp` 与 `.jpg` 都读不出来）。
 
 定位数据（都是生成物，手改会被冲掉）：
     MapOverlayJPGData.lua   每图一条 {宽,高,偏移x,偏移y}，帧口径 ⇒ 全库都是 {1002,668,0,0}

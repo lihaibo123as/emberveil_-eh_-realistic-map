@@ -22,7 +22,16 @@ EVAL_MAP_OVERLAY_PAINT_DATA = {
 	["Redridge"]={1002,668,0,0}, ["SearingGorge"]={1002,668,0,0}, ["Silithus"]={1002,668,0,0}, ["Silverpine"]={1002,668,0,0}, ["StonetalonMountains"]={1002,668,0,0},
 	["Stranglethorn"]={1002,668,0,0}, ["SwampOfSorrows"]={1002,668,0,0}, ["Tanaris"]={1002,668,0,0}, ["Teldrassil"]={1002,668,0,0}, ["ThousandNeedles"]={1002,668,0,0},
 	["Tirisfal"]={1002,668,0,0}, ["UngoroCrater"]={1002,668,0,0}, ["WesternPlaguelands"]={1002,668,0,0}, ["Westfall"]={1002,668,0,0}, ["Wetlands"]={1002,668,0,0},
-	["Winterspring"]={1002,668,0,0}
+	["Winterspring"]={1002,668,0,0},
+	-- ★★★0.2.21：**主城**（用户：「在 WorldMapPaint/_city 内增加的中文的主城图片. 将这些重命名为游戏注册英文能载入的图片.并且对接上」）
+	--   来源 = `media\WorldMapPaint\_city\*.png`（母版，不发货）→ 转成运行期 `media\WorldMapPaint\<图名>_cn.jpg`。
+	--   基线同其它 41 图 = **{1002,668,0,0}**（主城矩形本身也是 1.5 比例：实测 1520x1015 / 1519x1011 / 1523x1016 等）。
+	--   ★**别名两键并存**（项目既定惯例：写进 `SetTexture` 的路径由客户端**实时报的图名**拼出来，拼写不定就得两张都放）：
+	--     `Ogrimmar`（客户端自带美术目录的老拼写）/ `Orgrimmar`（WorldMapArea.dbc 的拼写）；
+	--     `Darnassis`（客户端老拼写）/ `Darnassus`（DBC 拼写）。⇒ 谁在跑都能定位，命不中的那一键只是没被用到。
+	["Stormwind"]={1002,668,0,0}, ["Ogrimmar"]={1002,668,0,0}, ["Orgrimmar"]={1002,668,0,0},
+	["Ironforge"]={1002,668,0,0}, ["Undercity"]={1002,668,0,0},
+	["Darnassis"]={1002,668,0,0}, ["Darnassus"]={1002,668,0,0}, ["ThunderBluff"]={1002,668,0,0}
 }
 -- ★元信息（取证用：核对时写日志，一眼知道比对的是哪一版数据）
-EVAL_MAP_OVERLAY_PAINT_META = { maps = 41, frame = "1002x668", src = "media/WorldMapPaint", gen = "gen_mappaintdata.js" }
+EVAL_MAP_OVERLAY_PAINT_META = { maps = 49, frame = "1002x668", src = "media/WorldMapPaint", gen = "gen_mappaintdata.js" }
