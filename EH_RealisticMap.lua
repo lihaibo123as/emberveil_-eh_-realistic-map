@@ -158,7 +158,7 @@ local MDQ = {}
 --   ② `/ehm mapfit 自检` 的落盘环表头与 `[1] 环境` 行（跟着那一次的读数一起存）。
 --   ★★★2026-10-10 迁移：本文件已不属于宿主 ⇒ **改记号跟本子插件的版本走**（`EH_RealisticMap.toc` 的 `## Version`，
 --     两者必须相等；宿主那套「三处一致」判据从本版起只管宿主自己的两处）。
-MDQ.BUILD = "0.2.22"
+MDQ.BUILD = "0.2.23"
 -- ★0.2.13：切档**是否换新纹理对象**（历史遗留开关）—— 默认 **false**（复用同一个对象、只换贴图）。
 MDQ.SWAP_OBJ_ON_SWITCH = false   -- ★0.2.20 现状：「区域实景」+「图层彩绘」两档在用（只关「原始图」，见 MDQ.LAYER_OFF）
 -- （0.2.9 的那句自述保留在 git 历史：`git show <0.2.9>:addons/EH_RealisticMap/EH_RealisticMap.lua`）   -- ★2026-10-11：加第三档「原始图」（LAYER_SRC：客户端美术合成的整图）+ 三档循环切换（与 .toc 的 ## Version 必须一致；闸门 = tmp/rel_version_check.js）

@@ -2,7 +2,7 @@
 ## Title: EH_RealisticMap |cff66ccff区域实景 / 图层彩绘 / 原始图|r
 ## Notes: 世界地图「整区一张」图层（原宿主 EvalHelp 的「关闭世界迷雾 → 区域实景贴图」整块迁移而来），两档并列可切换：① 区域实景 = 按 MapOverlayJPGData.lua 的定位基线把 media\WorldMapJpg 里的地形实景图铺满地图帧；② 图层彩绘 = 按 MapOverlayPaintData.lua 把 media\WorldMapPaint 里的游戏重绘风格整区图铺满地图帧（素材派生自 UnrealMap 的 HD 地图贴图：12 块基础瓦片打底 + 区域块叠加 = 全探索时的画面）；③ 原始图 = 按 MapOverlayData.lua 逐区域逐块贴 media\WorldMap 里的客户端原始区域美术（位置 = 定位表值 + MapOverlayOffset.lua / 你调的补偿；自带优先 → 客户端 Interface\WorldMap，与搬迁前那条已验证的路一致）。三档都写 OVERLAY 绘制层（同组内优先级最高），各自独立保存编辑补偿。世界地图顶栏「缩小」按钮右边有一颗同款快捷切换按钮。外加接管守护（原生探索层全藏 + 按表自绘 + 数量/存在性每拍检查）与残留清理；编辑模式可逐块拖拽/箭头微调并落盘（补偿存本插件自己的 EH_REALISTICMAP_CFG）。命令 /erm（与旧 /ehm mapfit 子命令逐字同义）。
 ## Author: EvalHelp
-## Version: 0.2.22
+## Version: 0.2.23
 ## X-Category: Map
 ## SavedVariables: EH_REALISTICMAP_CFG
 

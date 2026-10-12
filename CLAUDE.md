@@ -17,7 +17,7 @@
 | 节拍帧 `EH_WF_FEAT` · 清账帧 `EH_WF_CLEAN` · 编辑面板/列表/接盘 `EVAL_WF_*` | `ERM_FEAT` · `ERM_CLEAN` · `ERM_EDITLIST` / `ERM_EDITCATCH` / `ERM_GRAB<n>` |
 | 贴图/数据：根目录 `MapOverlayJPGData.lua`、`MapOverlayOffsetJPG.lua`、`media\WorldMapJpg\` | **整份搬进本目录**（随子插件打包；主包不再带 `media\WorldMap*`） |
 | 语言键 `TB_SM_*` / `WF_*` 里的 35 条（宿主 `Locales\*`） | 搬进本插件的 `Locales\{zhCN,enUS,ruRU}.lua`（**键名一字未改**，另加 `ERM_*`（现共 27 条）） |
-| `MDQ.BUILD` = 宿主版本 | **`MDQ.BUILD` = `0.2.22`**（== 本目录 `.toc` 的 `## Version`），与宿主版本**解耦** |
+| `MDQ.BUILD` = 宿主版本 | **`MDQ.BUILD` = `0.2.23`**（== 本目录 `.toc` 的 `## Version`），与宿主版本**解耦** |
 
 > ★★★**2026-10-11 新增「图层彩绘」与「原始图」（三档并列可切换；**现行状态 = 只留区域实景**，见 §6 与 §7）** —— 这一档是**新东西**，不在搬迁映射表里：
 > 用户原话「**新建个图层类型:图层彩绘,和实景图层并列可切换**」。素材/数据/生成器/闸门见 §3 与 §4；
@@ -105,7 +105,7 @@
 
 ## 3. 现行锚点（改代码先看这几行）
 
-- `ADDON_NAME = "EH_RealisticMap"` · `ADDON_TAG` · `MDQ.BUILD = "0.2.22"` —— 版本号**只此一处**（+ `.toc`）。
+- `ADDON_NAME = "EH_RealisticMap"` · `ADDON_TAG` · `MDQ.BUILD = "0.2.23"` —— 版本号**只此一处**（+ `.toc`）。
 - **顶栏快捷切换按钮的锚点（0.2.1 建 · 0.2.2 收口）**：句柄 `MDQ.mapBtn` · 口 `MDQ.mapBtnWant /
   mapBtnLabel / mapBtnTip / mapBtnMapIn / mapBtnZoomOK / mapBtnHook / mapBtnRaise / mapBtnEnsure /
   mapBtnSync / mapBtnLine` · 渲染错误出口 `MDQ.renderErrSay` · 帧名 `ERM_MAPBTN` · 模板
